@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-header bg-warning">Fund Management</div>
+  <div class="card-body">
+    <p>Manage deposits and withdrawals here.</p>
+    <form class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Amount</label>
+        <input type="number" class="form-control" placeholder="Enter amount">
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <button type="submit" class="btn btn-success me-2">Deposit</button>
+        <button type="submit" class="btn btn-danger">Withdraw</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

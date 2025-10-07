@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Your Portfolio</h1>
+  <p><strong>Funds:</strong> ${{ user.funds }}</p>
+
+  <table class="table">
+    <tr>
+      <th>Ticker</th>
+      <th>Quantity</th>
+      <th>Price (per share)</th>
+      <th>Total Value</th>
+      <th>Action</th>
+    </tr>
+    {% for item in user.portfolio %}
+    <tr>
+      <td>{{ item.stock.symbol }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>${{ "%.2f"|format(item.stock.price) }}</td>
+      <td>${{ "%.2f"|format(item.quantity * item.stock.price) }}</td>
+      <td>
+        <form action="{{ url_for('sell_stock', portfolio_id=item.id) }}" method="POST">
+          <input type="number" name="quantity" value="1" min="1" class="form-control d-inline" style="width: 80px;">
+          <button class="btn btn-danger">Sell</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No stocks in portfolio</td></tr>
+    {% endfor %}
+  </table>
+{% endblock %}

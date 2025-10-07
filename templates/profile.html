@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-header bg-secondary text-white">Profile</div>
+  <div class="card-body">
+    <p><strong>Full Name:</strong> {{ user.full_name }}</p>
+    <p><strong>Username:</strong> {{ user.name }}</p>
+    <p><strong>Email:</strong> {{ user.email }}</p>
+    <p><strong>Funds:</strong> ${{ "%.2f"|format(user.funds) }}</p>
+    <hr>
+    <a href="{{ url_for('logout') }}" class="btn btn-danger">Log Out</a>
+  </div>
+</div>
+{% endblock %}

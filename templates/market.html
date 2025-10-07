@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Stock Market</h1>
+
+  <table class="table">
+    <tr><th>Symbol</th><th>Price</th><th>Action</th></tr>
+
+    <tr>
+      <td>AAPL</td>
+      <td>$150</td>
+      <td>
+        <form action="{{ url_for('buy_stock', stock_id=1) }}" method="POST">
+          <input type="number" name="quantity" value="1" min="1" class="form-control d-inline" style="width: 80px;">
+          <button class="btn btn-primary">Buy</button>
+        </form>
+      </td>
+    </tr>
+    <tr>
+      <td>TSLA</td>
+      <td>$250</td>
+      <td>
+        <form action="{{ url_for('buy_stock', stock_id=2) }}" method="POST">
+          <input type="number" name="quantity" value="1" min="1" class="form-control d-inline" style="width: 80px;">
+          <button class="btn btn-primary">Buy</button>
+        </form>
+      </td>
+    </tr>
+    <tr>
+      <td>GOOG</td>
+      <td>$2800</td>
+      <td>
+        <form action="{{ url_for('buy_stock', stock_id=3) }}" method="POST">
+          <input type="number" name="quantity" value="1" min="1" class="form-control d-inline" style="width: 80px;">
+          <button class="btn btn-primary">Buy</button>
+        </form>
+      </td>
+    </tr>
+  </table>
+
+  <a href="{{ url_for('portfolio') }}" class="btn btn-secondary">View Portfolio</a>
+{% endblock %}
