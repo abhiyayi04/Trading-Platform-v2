@@ -11,7 +11,7 @@ import atexit, os, random
 app = Flask(__name__)
 
 # ---------------- Configuration ---------------- #
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:Chikku04mysql@localhost/stock_trading_db2'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:password@localhost/stock_trading_db2'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your-secret-key'
 

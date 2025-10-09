@@ -4,6 +4,9 @@
   <h1>Your Portfolio</h1>
   <p><strong>Funds:</strong> ${{ user.funds }}</p>
 
+  <!-- Optional alert to show market status -->
+  <div id="market-status" class="alert alert-info" style="display: none;"></div>
+
   <table class="table">
     <tr>
       <th>Ticker</th>
@@ -29,4 +32,42 @@
     <tr><td colspan="5">No stocks in portfolio</td></tr>
     {% endfor %}
   </table>
+
+  <!-- ✅ Add this JavaScript block -->
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+    const day = now.getDay(); // Sunday=0, Monday=1, ..., Saturday=6
+
+    // Market open hours (9:30 AM – 4:00 PM)
+    const marketOpen = 9.5;
+    const marketClose = 16.0;
+
+    // Holidays (YYYY-MM-DD)
+    const holidays = ["2025-01-01", "2025-07-04", "2025-12-25"];
+    const today = now.toISOString().split("T")[0];
+
+    // Determine if market is closed
+    let marketClosed = false;
+    if (day === 0 || day === 6) marketClosed = true; 
+    if (currentHour < marketOpen || currentHour > marketClose) marketClosed = true;
+    if (holidays.includes(today)) marketClosed = true;
+
+    // Disable Sell buttons and show market status
+    const statusDiv = document.getElementById("market-status");
+    if (marketClosed) {
+      document.querySelectorAll("button.btn-danger").forEach(btn => {
+        btn.disabled = true;
+        btn.title = "Market closed. Try again during market hours.";
+      });
+      statusDiv.textContent = " The market is currently closed. Selling is available on weekdays between 9:30 AM and 4:00 PM.";
+      statusDiv.classList.replace("alert-info", "alert-warning");
+      statusDiv.style.display = "block";
+    } else {
+      statusDiv.textContent = " Market is open for trading.";
+      statusDiv.style.display = "block";
+    }
+  });
+  </script>
 {% endblock %}
