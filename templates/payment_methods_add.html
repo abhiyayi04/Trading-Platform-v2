@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+  <h4>Add Payment Method</h4>
+
+  <div class="alert alert-warning">
+    <strong>Demo only:</strong> Don’t enter real card numbers or CVV.
+    We store only <em>brand</em>, <em>last 4</em>, and <em>expiry</em>.
+  </div>
+
+  <form method="POST" class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Brand</label>
+      <select name="brand" class="form-select" required>
+        <option>Visa</option>
+        <option>Mastercard</option>
+        <option>Amex</option>
+        <option>Discover</option>
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Last 4 digits</label>
+      <input type="text" name="last4" class="form-control" maxlength="4" pattern="\d{4}" required>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label">Exp. Month</label>
+      <input type="number" name="exp_month" class="form-control" min="1" max="12" required>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label">Exp. Year</label>
+      <input type="number" name="exp_year" class="form-control" min="2025" required>
+    </div>
+
+    <div class="col-12 form-check">
+      <input class="form-check-input" type="checkbox" name="is_default" id="is_default" checked>
+      <label class="form-check-label" for="is_default">Set as default</label>
+    </div>
+
+    <div class="col-12">
+      <button class="btn btn-primary">Save Method</button>
+      <a class="btn btn-link" href="{{ url_for('funds') }}">Back to Funds</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

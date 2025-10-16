@@ -1,14 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card shadow-sm">
-  <div class="card-header bg-dark text-white">Admin Profile</div>
-  <div class="card-body">
-    <p><strong>Full Name:</strong> {{ user.full_name }}</p>
-    <p><strong>Username:</strong> {{ user.name }}</p>
-    <p><strong>Email:</strong> {{ user.email }}</p>
-    <p><strong>Role:</strong> {{ user.role }}</p>
-    <hr>
-    <a href="{{ url_for('logout') }}" class="btn btn-danger">Log Out</a>
-  </div>
+<div class="container py-4">
+  <h4>Admin Profile</h4>
+  <ul class="list-group">
+    <li class="list-group-item"><strong>Name:</strong> {{ user.full_name }}</li>
+    <li class="list-group-item"><strong>Username:</strong> {{ user.name }}</li>
+    <li class="list-group-item"><strong>Email:</strong> {{ user.email }}</li>
+    <li class="list-group-item"><strong>Role:</strong> {{ user.role }}</li>
+  </ul>
 </div>
 {% endblock %}

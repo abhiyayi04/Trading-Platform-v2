@@ -1,19 +1,143 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card shadow-sm">
-  <div class="card-header bg-warning">Fund Management</div>
-  <div class="card-body">
-    <p>Manage deposits and withdrawals here.</p>
-    <form class="row g-3">
-      <div class="col-md-6">
-        <label class="form-label">Amount</label>
-        <input type="number" class="form-control" placeholder="Enter amount">
+<div class="container py-4">
+  <div class="card shadow-sm">
+    <div class="card-header bg-warning"><h5 class="mb-0">Fund Management</h5></div>
+    <div class="card-body">
+      <p class="lead">Current Balance: <strong>${{ "%.2f"|format(user.funds) }}</strong></p>
+
+      <div class="row g-3">
+        <!-- ===== LEFT: DEPOSIT ===== -->
+        <div class="col-md-6">
+          <form id="deposit-form" class="row g-2" method="POST" action="{{ url_for('deposit_funds') }}">
+            <div class="col-12">
+              <label class="form-label">Amount (USD)</label>
+              <input type="number" name="amount" class="form-control"
+                     placeholder="Enter amount" step="0.01" min="0.01" required>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label d-flex justify-content-between align-items-center">
+                <span>Payment Method</span>
+                <a class="btn btn-sm btn-outline-dark" href="{{ url_for('add_payment_method') }}">
+                  Add another card
+                </a>
+              </label>
+
+              {% if methods and methods|length > 0 %}
+                <div class="list-group mb-2">
+                  {% for m in methods %}
+                    <label class="list-group-item d-flex align-items-center gap-2">
+                      <input class="form-check-input me-2"
+                             type="radio"
+                             name="payment_method_id"
+                             value="{{ m.id }}"
+                             {% if m.is_default or loop.first %}checked{% endif %}>
+                      <div>
+                        <strong>{{ m.brand }}</strong> •••• {{ m.last4 }}
+                        <span class="text-muted">({{ "%02d"|format(m.exp_month) }}/{{ m.exp_year }})</span>
+                        {% if m.is_default %}
+                          <span class="badge bg-success ms-2">Default</span>
+                        {% else %}
+                          <small class="text-muted ms-1">Not default</small>
+                        {% endif %}
+                      </div>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                  <span>No payment method on file.</span>
+                  <a class="btn btn-sm btn-outline-dark" href="{{ url_for('add_payment_method') }}">Add one</a>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="col-12 d-flex align-items-end">
+              <button type="submit" class="btn btn-success"
+                {% if not methods or methods|length == 0 %}disabled{% endif %}>
+                Deposit
+              </button>
+            </div>
+          </form>
+
+          <!-- Card management (separate forms, NOT inside deposit form) -->
+          {% if methods and methods|length > 0 %}
+            <div class="mt-3">
+              {% for m in methods %}
+                <div class="d-flex align-items-center justify-content-between border rounded px-3 py-2 mb-2">
+                  <div>
+                    <strong>{{ m.brand }}</strong> •••• {{ m.last4 }}
+                    <span class="text-muted">({{ "%02d"|format(m.exp_month) }}/{{ m.exp_year }})</span>
+                    {% if m.is_default %}
+                      <span class="badge bg-success ms-2">Default</span>
+                    {% else %}
+                      <span class="text-muted ms-2">Not default</span>
+                    {% endif %}
+                  </div>
+                  <div class="d-flex gap-2">
+                    {% if not m.is_default %}
+                    <form method="POST" action="{{ url_for('set_default_payment_method', pm_id=m.id) }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Make default</button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('delete_payment_method', pm_id=m.id) }}"
+                          onsubmit="return confirm('Remove this card?');">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    </form>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- ===== RIGHT: WITHDRAW ===== -->
+        <div class="col-md-6">
+          <form class="row g-2" method="POST" action="{{ url_for('withdraw_funds') }}">
+            <div class="col-12">
+              <label class="form-label">Amount (USD)</label>
+              <input type="number" name="amount" class="form-control"
+                     placeholder="Enter amount" step="0.01" min="0.01" required>
+            </div>
+            <div class="col-12 d-flex align-items-end">
+              <button type="submit" class="btn btn-danger">Withdraw</button>
+            </div>
+          </form>
+        </div>
       </div>
-      <div class="col-md-6 d-flex align-items-end">
-        <button type="submit" class="btn btn-success me-2">Deposit</button>
-        <button type="submit" class="btn btn-danger">Withdraw</button>
+
+      {% if recent_txns is defined %}
+      <hr class="my-4">
+      <h6>Recent Transactions</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Balance After</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in recent_txns %}
+            <tr>
+              <td>{{ t.created_at }}</td>
+              <td>{{ t.type }}</td>
+              <td>${{ "%.2f"|format(t.amount) }}</td>
+              <td>${{ "%.2f"|format(t.balance_after) }}</td>
+              <td>{{ t.note or "" }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted text-center">No transactions yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-    </form>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}
