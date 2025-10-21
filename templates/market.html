@@ -2,8 +2,8 @@
 {% block content %}
 <h1>Stock Market</h1>
 
-<!-- Optional alert for market status -->
-<div id="market-status" class="alert alert-info" style="display: none;"></div>
+<!-- Market status banner -->
+<div id="market-status" class="alert alert-info" style="display:none;"></div>
 
 <table class="table">
   <thead>
@@ -21,11 +21,13 @@
       <td>{{ stock.company_name }}</td>
       <td>{{ stock.symbol }}</td>
       <td>${{ "%.2f"|format(stock.price) }}</td>
-      <td>{{ stock.volume }}</td>
+      <td>{{ "%.4f"|format(stock.volume) }}</td>
       <td>
-        <form action="{{ url_for('buy_stock', stock_id=stock.id) }}" method="POST" class="d-inline">
-          <input type="number" name="quantity" value="1" min="0.1" step="any" class="form-control d-inline" style="width: 80px;">
-          <button class="btn btn-primary btn-sm">Buy</button>
+        <!-- NOTE: new pending-order route -->
+        <form action="{{ url_for('order_buy', stock_id=stock.id) }}" method="POST" class="d-inline">
+          <input type="number" name="quantity" value="1" min="0.0001" step="0.0001"
+                 class="form-control d-inline trade-input" style="width: 100px;">
+          <button class="btn btn-primary btn-sm trade-submit">Buy</button>
         </form>
       </td>
     </tr>
@@ -35,42 +37,49 @@
 
 <a href="{{ url_for('portfolio') }}" class="btn btn-secondary">View Portfolio</a>
 
-<!--  Market hour logic -->
+<!-- Market-hours logic -->
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  const now = new Date();
-  const currentHour = now.getHours() + now.getMinutes() / 60;
-  const day = now.getDay(); 
+(function () {
+  const OPEN  = "09:30";  
+  const CLOSE = "16:00";
+  const HOLIDAYS = [ "2025-01-01", "2025-07-04", "2025-12-25" ]; 
 
-  // Market open hours (9:30 AM – 4:00 PM)
-  const marketOpen = 9.5;
-  const marketClose = 16.0;
-
-  // Holidays (YYYY-MM-DD)
-  const holidays = ["2025-01-01", "2025-07-04", "2025-12-25"];
-  const today = now.toISOString().split("T")[0];
-
-  // Determine if market is closed
-  let marketClosed = false;
-  if (day === 0 || day === 6) marketClosed = true; 
-  if (currentHour < marketOpen || currentHour > marketClose) marketClosed = true;
-  if (holidays.includes(today)) marketClosed = true;
-
-  // Disable Buy buttons and show banner
   const statusDiv = document.getElementById("market-status");
-  if (marketClosed) {
-    document.querySelectorAll("button.btn-primary").forEach(btn => {
-      btn.disabled = true;
-      btn.title = "Market closed. Try again during market hours.";
-    });
-    statusDiv.textContent = " The market is currently closed. Trading is available on weekdays between 9:30 AM and 4:00 PM.";
-    statusDiv.classList.replace("alert-info", "alert-warning");
-    statusDiv.style.display = "block";
-  } else {
-    statusDiv.textContent = " Market is open for trading.";
-    statusDiv.style.display = "block";
-  }
-});
-</script>
 
+  function hhmmToMinutes(hhmm){ const [h,m]=hhmm.split(":").map(Number); return h*60+m; }
+  function toYMD(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  function isWeekday(d){ const w=d.getDay(); return w!==0 && w!==6; }
+  function isHoliday(d){ return HOLIDAYS.includes(toYMD(d)); }
+  function isOpenNow(d=new Date()){
+    if (!isWeekday(d)) return false;
+    if (isHoliday(d)) return false;
+    const minutes = d.getHours()*60 + d.getMinutes();
+    return minutes >= hhmmToMinutes(OPEN) && minutes <= hhmmToMinutes(CLOSE);
+  }
+  function setDisabled(disabled){
+    document.querySelectorAll(".trade-input, .trade-submit").forEach(el=>{
+      el.disabled = disabled;
+      if (disabled) el.title = "Market closed. Try again during market hours.";
+      else el.removeAttribute("title");
+    });
+  }
+  function refresh(){
+    const open = isOpenNow();
+    setDisabled(!open);
+    statusDiv.style.display = "block";
+    if (open) {
+      statusDiv.classList.remove("alert-warning");
+      statusDiv.classList.add("alert-info");
+      statusDiv.textContent = " Market is open for trading.";
+    } else {
+      statusDiv.classList.remove("alert-info");
+      statusDiv.classList.add("alert-warning");
+      statusDiv.textContent = " The market is currently closed. Trading is available on weekdays between "
+        + OPEN + " and " + CLOSE + ".";
+    }
+  }
+  refresh();
+  setInterval(refresh, 30000);
+})();
+</script>
 {% endblock %}

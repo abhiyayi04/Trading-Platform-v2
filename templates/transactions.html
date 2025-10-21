@@ -1,32 +1,113 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container py-4">
-  <h4>All Transactions</h4>
+
+  <!-- Orders -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="mb-0">Orders</h4>
+    <small class="text-muted">Price is locked at order time</small>
+  </div>
+
+  <div class="table-responsive mb-4">
+    <table class="table table-striped align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Placed</th>
+          <th>Stock</th>
+          <th>Side</th>
+          <th class="text-end">Qty</th>
+          <th class="text-end">Locked Price</th>
+          <th class="text-end">Total</th>
+          <th>Status</th>
+          <th style="width: 180px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+          <tr>
+            <td>{{ o.created_at.strftime("%Y-%m-%d %H:%M:%S") if o.created_at else "" }}</td>
+            <td>{{ o.stock.symbol }} <small class="text-muted">({{ o.stock.company_name }})</small></td>
+            <td>
+              {% if o.side == "BUY" %}
+                <span class="badge bg-primary">BUY</span>
+              {% else %}
+                <span class="badge bg-info text-dark">SELL</span>
+              {% endif %}
+            </td>
+            <td class="text-end">{{ "%.4f"|format(o.quantity) }}</td>
+            <td class="text-end">${{ "%.2f"|format(o.price_locked) }}</td>
+            <td class="text-end">${{ "%.2f"|format(o.price_locked * o.quantity) }}</td>
+            <td>
+              {% if o.status == "PENDING" %}
+                <span class="badge bg-warning text-dark">PENDING</span>
+              {% elif o.status == "EXECUTED" %}
+                <span class="badge bg-success">EXECUTED</span>
+                <div><small class="text-muted">{{ o.executed_at.strftime("%Y-%m-%d %H:%M:%S") if o.executed_at else "" }}</small></div>
+              {% else %}
+                <span class="badge bg-secondary">CANCELED</span>
+                <div><small class="text-muted">{{ o.canceled_at.strftime("%Y-%m-%d %H:%M:%S") if o.canceled_at else "" }}</small></div>
+              {% endif %}
+            </td>
+            <td>
+              {% if o.status == "PENDING" %}
+                <form method="post" action="{{ url_for('order_execute', order_id=o.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-primary">Execute</button>
+                </form>
+                <form method="post" action="{{ url_for('order_cancel', order_id=o.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-danger">Cancel</button>
+                </form>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No orders yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Cash Transactions -->
+  <h4 class="mb-3">Cash Transactions</h4>
   <div class="table-responsive">
-    <table class="table table-striped">
-      <thead>
+    <table class="table table-striped align-middle">
+      <thead class="table-light">
         <tr>
           <th>Date</th>
           <th>Type</th>
-          <th>Amount</th>
-          <th>Balance After</th>
+          <th class="text-end">Amount</th>
+          <th class="text-end">Balance After</th>
           <th>Note</th>
         </tr>
       </thead>
       <tbody>
         {% for t in txns %}
-        <tr>
-          <td>{{ t.created_at }}</td>
-          <td>{{ t.type }}</td>
-          <td>${{ "%.2f"|format(t.amount) }}</td>
-          <td>${{ "%.2f"|format(t.balance_after) }}</td>
-          <td>{{ t.note or "" }}</td>
-        </tr>
+          <tr>
+            <td>{{ t.created_at.strftime("%Y-%m-%d %H:%M:%S") if t.created_at else "" }}</td>
+            <td>
+              {% if t.type == "DEPOSIT" %}
+                <span class="badge bg-success">DEPOSIT</span>
+              {% elif t.type == "WITHDRAW" %}
+                <span class="badge bg-danger">WITHDRAW</span>
+              {% elif t.type == "BUY" %}
+                <span class="badge bg-primary">BUY</span>
+              {% elif t.type == "SELL" %}
+                <span class="badge bg-info text-dark">SELL</span>
+              {% else %}
+                {{ t.type }}
+              {% endif %}
+            </td>
+            <td class="text-end">${{ "%.2f"|format(t.amount) }}</td>
+            <td class="text-end">${{ "%.2f"|format(t.balance_after) }}</td>
+            <td>{{ t.note or "" }}</td>
+          </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted text-center">No transactions recorded.</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-4">No cash transactions recorded.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
 </div>
 {% endblock %}

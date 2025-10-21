@@ -1,73 +1,73 @@
 {% extends "base.html" %}
-
 {% block content %}
-  <h1>Your Portfolio</h1>
-  <p><strong>Funds:</strong> ${{ user.funds }}</p>
+<div class="container py-4">
 
-  <!-- Optional alert to show market status -->
-  <div id="market-status" class="alert alert-info" style="display: none;"></div>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Portfolio</h3>
+    <div class="text-muted">Cash: ${{ "%.2f"|format(current_user.funds) }}</div>
+  </div>
 
-  <table class="table">
-    <tr>
-      <th>Ticker</th>
-      <th>Quantity</th>
-      <th>Price (per share)</th>
-      <th>Total Value</th>
-      <th>Action</th>
-    </tr>
-    {% for item in user.portfolio %}
-    <tr>
-      <td>{{ item.stock.symbol }}</td>
-      <td>{{ item.quantity }}</td>
-      <td>${{ "%.2f"|format(item.stock.price) }}</td>
-      <td>${{ "%.2f"|format(item.quantity * item.stock.price) }}</td>
-      <td>
-        <form action="{{ url_for('sell_stock', portfolio_id=item.id) }}" method="POST">
-          <input type="number" name="quantity" value="1" min="1" class="form-control d-inline" style="width: 80px;">
-          <button class="btn btn-danger">Sell</button>
-        </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="5">No stocks in portfolio</td></tr>
-    {% endfor %}
-  </table>
+  <div id="market-status" class="alert alert-info mb-3" style="display:none;"></div>
 
-  <!-- ✅ Add this JavaScript block -->
-  <script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const now = new Date();
-    const currentHour = now.getHours() + now.getMinutes() / 60;
-    const day = now.getDay(); // Sunday=0, Monday=1, ..., Saturday=6
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Company</th>
+          <th>Symbol</th>
+          <th class="text-end">Qty</th>
+          <th class="text-end">Current Price</th>
+          <th class="text-end">Market Value</th>
+          <th style="width: 220px;">Sell</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in current_user.portfolio %}
+        <tr>
+          <td>{{ h.stock.company_name }}</td>
+          <td>{{ h.stock.symbol }}</td>
+          <td class="text-end">{{ "%.2f"|format(h.quantity) }}</td>
+          <td class="text-end">${{ "%.2f"|format(h.stock.price) }}</td>
+          <td class="text-end">${{ "%.2f"|format(h.quantity * h.stock.price) }}</td>
+          <td>
+            <form action="{{ url_for('order_sell', portfolio_id=h.id) }}" method="POST" class="d-flex gap-2">
+              <input type="number" name="quantity" step="0.0001" min="0.0001"
+                     max="{{ h.quantity }}" required class="form-control trade-input" placeholder="Qty">
+              <button class="btn btn-outline-primary btn-sm trade-submit" type="submit">Sell</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No holdings yet. Buy from the Market.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
-    // Market open hours (9:30 AM – 4:00 PM)
-    const marketOpen = 9.5;
-    const marketClose = 16.0;
+<script>
+(function () {
+  const OPEN  = "09:30";
+  const CLOSE = "13:00";
+  const HOLIDAYS = ["2025-01-01", "2025-07-04", "2025-12-25"];
 
-    // Holidays (YYYY-MM-DD)
-    const holidays = ["2025-01-01", "2025-07-04", "2025-12-25"];
-    const today = now.toISOString().split("T")[0];
-
-    // Determine if market is closed
-    let marketClosed = false;
-    if (day === 0 || day === 6) marketClosed = true; 
-    if (currentHour < marketOpen || currentHour > marketClose) marketClosed = true;
-    if (holidays.includes(today)) marketClosed = true;
-
-    // Disable Sell buttons and show market status
-    const statusDiv = document.getElementById("market-status");
-    if (marketClosed) {
-      document.querySelectorAll("button.btn-danger").forEach(btn => {
-        btn.disabled = true;
-        btn.title = "Market closed. Try again during market hours.";
-      });
-      statusDiv.textContent = " The market is currently closed. Selling is available on weekdays between 9:30 AM and 4:00 PM.";
-      statusDiv.classList.replace("alert-info", "alert-warning");
-      statusDiv.style.display = "block";
-    } else {
-      statusDiv.textContent = " Market is open for trading.";
-      statusDiv.style.display = "block";
-    }
-  });
-  </script>
+  function hhmmToMin(h){const[x,y]=h.split(":").map(Number);return x*60+y;}
+  function ymd(d){return d.toISOString().split("T")[0];}
+  function isOpen(){
+    const d = new Date(), m=d.getHours()*60+d.getMinutes();
+    const wd=d.getDay();
+    if(wd===0||wd===6) return false;
+    if(HOLIDAYS.includes(ymd(d))) return false;
+    return m>=hhmmToMin(OPEN)&&m<=hhmmToMin(CLOSE);
+  }
+  function apply(){
+    const open=isOpen(), banner=document.getElementById("market-status");
+    document.querySelectorAll(".trade-input, .trade-submit").forEach(el=>el.disabled=!open);
+    banner.style.display="block";
+    if(open){banner.className="alert alert-info";banner.textContent="Market is OPEN for trading.";}
+    else{banner.className="alert alert-warning";banner.textContent="Market is CLOSED. Trading allowed only 9:30 AM – 4:00 PM, weekdays.";}
+  }
+  apply(); setInterval(apply,30000);
+})();
+</script>
 {% endblock %}

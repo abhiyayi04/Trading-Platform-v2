@@ -7,6 +7,7 @@ from flask_login import (
 from flask_bcrypt import Bcrypt
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
+from datetime import datetime
 import atexit, os, random
 
 app = Flask(__name__)
@@ -19,7 +20,7 @@ def no_icon():
     return ('', 204)
 
 # ---------------- Configuration ---------------- #
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:Bpassword@localhost/stock_trading_db2"
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:password@localhost/stock_trading_db2"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your-secret-key'
 
@@ -60,25 +61,49 @@ class Portfolio(db.Model):
 class FinancialTransaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    type = db.Column(db.String(20), nullable=False)  # DEPOSIT or WITHDRAW
+    type = db.Column(db.String(20), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     balance_after = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     user = db.relationship("User", backref=db.backref("transactions", lazy=True))
 
-# demo-safe stored payment method (brand, last4, expiry, token)
 class PaymentMethod(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    brand = db.Column(db.String(20), nullable=False)        # Visa/Mastercard/Amex/Discover
+    brand = db.Column(db.String(20), nullable=False)
     last4 = db.Column(db.String(4), nullable=False)
     exp_month = db.Column(db.Integer, nullable=False)
     exp_year = db.Column(db.Integer, nullable=False)
     is_default = db.Column(db.Boolean, default=True)
-    token = db.Column(db.String(64))                        # demo/test token only
+    token = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     user = db.relationship("User", backref=db.backref("payment_methods", lazy=True))
+
+# ---- Orders for PENDING / EXECUTED / CANCELED ----
+class OrderStatus:
+    PENDING = "PENDING"
+    EXECUTED = "EXECUTED"
+    CANCELED = "CANCELED"
+
+class OrderSide:
+    BUY = "BUY"
+    SELL = "SELL"
+
+class TradeOrder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey("stock.id"), nullable=False, index=True)
+    side = db.Column(db.String(4), nullable=False) 
+    quantity = db.Column(db.Float, nullable=False)
+    price_locked = db.Column(db.Float, nullable=False) 
+    status = db.Column(db.String(10), default=OrderStatus.PENDING) 
+    created_at = db.Column(db.DateTime, default=db.func.now(), index=True)
+    executed_at = db.Column(db.DateTime)
+    canceled_at = db.Column(db.DateTime)
+
+    user = db.relationship("User", backref=db.backref("orders", lazy=True))
+    stock = db.relationship("Stock")
 
 # ---------------- Helpers ---------------- #
 def record_txn(user_id: int, txn_type: str, amount: float, balance_after: float, note: str = None):
@@ -109,6 +134,80 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
+# --- order helpers ---
+def place_order(user: User, stock: Stock, side: str, qty: float) -> TradeOrder:
+    if qty <= 0:
+        raise ValueError("Quantity must be positive")
+    order = TradeOrder(
+        user_id=user.id,
+        stock_id=stock.id,
+        side=side,
+        quantity=qty,
+        price_locked=float(stock.price), 
+        status=OrderStatus.PENDING
+    )
+    db.session.add(order)
+    db.session.commit()
+    return order
+
+def _add_or_update_position(user_id: int, stock: Stock, qty_delta: float):
+    holding = Portfolio.query.filter_by(user_id=user_id, stock_id=stock.id).first()
+    if holding:
+        holding.quantity = round(holding.quantity + qty_delta, 6)
+        if holding.quantity <= 0:
+            db.session.delete(holding)
+    else:
+        if qty_delta > 0:
+            db.session.add(Portfolio(user_id=user_id, stock_id=stock.id, quantity=qty_delta))
+
+def execute_order(order_id: int):
+    order = TradeOrder.query.get_or_404(order_id)
+    if order.status != OrderStatus.PENDING:
+        return False, "Order is not pending."
+
+    user = order.user
+    stock = order.stock
+    qty = float(order.quantity)
+    total = round(order.price_locked * qty, 2)
+
+    if order.side == OrderSide.BUY:
+        if stock.volume < qty:
+            return False, "Insufficient market volume."
+        if user.funds < total:
+            return False, "Insufficient funds."
+
+        user.funds = round(user.funds - total, 2)
+        stock.volume = round(stock.volume - qty, 6)
+        _add_or_update_position(user.id, stock, +qty)
+        record_txn(user.id, "BUY", total, user.funds,
+                   note=f"BUY {qty} {stock.symbol} @ ${order.price_locked:.2f}")
+    else: 
+        holding = Portfolio.query.filter_by(user_id=user.id, stock_id=stock.id).first()
+        if not holding or holding.quantity < qty:
+            return False, "Not enough shares to sell."
+
+        holding.quantity = round(holding.quantity - qty, 6)
+        stock.volume = round(stock.volume + qty, 6)
+        user.funds = round(user.funds + total, 2)
+        if holding.quantity <= 0:
+            db.session.delete(holding)
+        record_txn(user.id, "SELL", total, user.funds,
+                   note=f"SELL {qty} {stock.symbol} @ ${order.price_locked:.2f}")
+
+    order.status = OrderStatus.EXECUTED
+    order.executed_at = datetime.utcnow()
+    db.session.commit()
+    return True, "Order executed."
+
+def cancel_order(order_id: int):
+    order = TradeOrder.query.get_or_404(order_id)
+    if order.status != OrderStatus.PENDING:
+        return False, "Only pending orders can be canceled."
+    order.status = OrderStatus.CANCELED
+    order.canceled_at = datetime.utcnow()
+    db.session.commit()
+    return True, "Order canceled."
+
 # ---------------- Create tables ---------------- #
 with app.app_context():
     db.create_all()
@@ -129,7 +228,7 @@ def update_all_stock_prices():
         for stock in Stock.query.all():
             stock.price = update_price(stock.price)
         db.session.commit()
-        print("✅ Stock prices updated")
+        print("Stock prices updated")
 
 # scheduler
 scheduler = BackgroundScheduler(daemon=True)
@@ -214,64 +313,65 @@ def market():
 def portfolio():
     return render_template("portfolio.html", user=current_user)
 
-# BUY STOCK
-@app.route("/buy/<int:stock_id>", methods=["POST"])
+# ------------ ORDER ROUTES ------------
+@app.route("/order/buy/<int:stock_id>", methods=["POST"])
 @customer_required
-def buy_stock(stock_id):
+def order_buy(stock_id):
     stock = Stock.query.get_or_404(stock_id)
     qty = float(request.form["quantity"])
-    total_cost = stock.price * qty
-
-    if stock.volume < qty:
-        flash("Not enough stock volume available!", "danger")
-        return redirect(url_for("market"))
-
-    if current_user.funds >= total_cost:
-        current_user.funds = round(current_user.funds - total_cost, 2)
-        stock.volume = round(stock.volume - qty, 6)
-        holding = Portfolio.query.filter_by(user_id=current_user.id, stock_id=stock.id).first()
-        if holding:
-            holding.quantity = round(holding.quantity + qty, 6)
-        else:
-            db.session.add(Portfolio(user_id=current_user.id, stock_id=stock.id, quantity=qty))
-        db.session.commit()
-        flash("Stock bought successfully!", "success")
-    else:
-        flash("Not enough funds to buy this stock!", "danger")
-
+    try:
+        order = place_order(current_user, stock, OrderSide.BUY, qty)
+        flash(f"Buy order placed: {qty} {stock.symbol} @ ${order.price_locked:.2f} (PENDING)", "info")
+    except Exception as e:
+        flash(str(e), "danger")
     return redirect(url_for("market"))
 
-# SELL STOCK
-@app.route("/sell/<int:portfolio_id>", methods=["POST"])
+@app.route("/order/sell/<int:portfolio_id>", methods=["POST"])
 @customer_required
-def sell_stock(portfolio_id):
+def order_sell(portfolio_id):
     holding = Portfolio.query.get_or_404(portfolio_id)
     qty = float(request.form["quantity"])
-
-    if holding.quantity < qty:
-        flash("Not enough shares to sell!", "danger")
-        return redirect(url_for("portfolio"))
-
-    holding.quantity = round(holding.quantity - qty, 6)
-    holding.stock.volume = round(holding.stock.volume + qty, 6)
-    current_user.funds = round(current_user.funds + holding.stock.price * qty, 2)
-
-    if holding.quantity <= 0:
-        db.session.delete(holding)
-
-    db.session.commit()
-    flash("Stock sold successfully!", "success")
+    stock = holding.stock
+    try:
+        order = place_order(current_user, stock, OrderSide.SELL, qty)
+        flash(f"Sell order placed: {qty} {stock.symbol} @ ${order.price_locked:.2f} (PENDING)", "info")
+    except Exception as e:
+        flash(str(e), "danger")
     return redirect(url_for("portfolio"))
+
+@app.route("/order/execute/<int:order_id>", methods=["POST"])
+@customer_required
+def order_execute(order_id):
+    order = TradeOrder.query.get_or_404(order_id)
+    if order.user_id != current_user.id and current_user.role != "admin":
+        abort(403)
+    ok, msg = execute_order(order_id)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("transactions"))
+
+@app.route("/order/cancel/<int:order_id>", methods=["POST"])
+@customer_required
+def order_cancel(order_id):
+    order = TradeOrder.query.get_or_404(order_id)
+    if order.user_id != current_user.id and current_user.role != "admin":
+        abort(403)
+    ok, msg = cancel_order(order_id)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("transactions"))
 
 # -------- Transactions -------- #
 @app.route("/transactions", endpoint="transactions")
 @customer_required
 def transactions():
-    txns = FinancialTransaction.query.filter_by(user_id=current_user.id)\
-        .order_by(FinancialTransaction.created_at.desc()).all()
-    return render_template("transactions.html", txns=txns)
+    orders = (TradeOrder.query
+              .filter_by(user_id=current_user.id)
+              .order_by(TradeOrder.created_at.desc()).all())
+    txns = (FinancialTransaction.query
+            .filter_by(user_id=current_user.id)
+            .order_by(FinancialTransaction.created_at.desc()).all())
+    return render_template("transactions.html", orders=orders, txns=txns)
 
-# -------- Funds pages & actions (FORM endpoints) -------- #
+# -------- Funds pages & actions-------- #
 @app.route("/funds", methods=["GET"])
 @customer_required
 def funds():
@@ -294,7 +394,6 @@ def deposit_funds():
         flash("Deposit must be greater than 0.", "warning")
         return redirect(url_for("funds"))
 
-    # require a payment method (selected or default)
     pm_id = request.form.get("payment_method_id")
     if pm_id:
         pm = PaymentMethod.query.filter_by(id=pm_id, user_id=current_user.id).first()
@@ -303,9 +402,8 @@ def deposit_funds():
 
     if not pm:
         flash("Please add a payment method before depositing.", "warning")
-        return redirect(url_for("add_payment_method"))  # <-- send to add form
+        return redirect(url_for("add_payment_method"))
 
-    # Simulate charge
     current_user.funds = round(current_user.funds + amount, 2)
     record_txn(current_user.id, "DEPOSIT", amount, current_user.funds,
                note=f"Deposit via {pm.brand} ••••{pm.last4}")
@@ -338,7 +436,7 @@ def withdraw_funds():
     flash(f"Withdrew ${amount:,.2f}", "success")
     return redirect(url_for("funds"))
 
-# -------- Funds actions (JSON endpoints for JS buttons) -------- #
+# -------- Funds actions-------- #
 @app.route("/api/funds/deposit", methods=["POST"])
 @customer_required
 def api_deposit_funds():
@@ -384,8 +482,7 @@ def api_withdraw_funds():
     db.session.commit()
     return jsonify(ok=True, balance=current_user.funds, message=f"Withdrew ${amount:,.2f}")
 
-# ===== Payment method management =====
-# Redirect list to add form so we don't need payment_methods.html
+# ===== Payment method management ===== #
 @app.route("/payment-methods", endpoint="payment_methods")
 @customer_required
 def payment_methods():
@@ -399,9 +496,8 @@ def add_payment_method():
         last4 = (request.form.get("last4") or "").strip()
         exp_month = request.form.get("exp_month")
         exp_year = request.form.get("exp_year")
-        token = (request.form.get("token") or "").strip()  # demo token only
+        token = (request.form.get("token") or "").strip() 
 
-        # Basic validation (never store PAN/CVV)
         try:
             exp_month = int(exp_month)
             exp_year = int(exp_year)
@@ -417,7 +513,6 @@ def add_payment_method():
             flash("Enter last 4 digits only.", "danger")
             return redirect(url_for("add_payment_method"))
 
-        # default handling
         count = PaymentMethod.query.filter_by(user_id=current_user.id).count()
         make_default = bool(request.form.get("is_default")) or count == 0
         if make_default:
@@ -435,7 +530,7 @@ def add_payment_method():
         db.session.add(pm)
         db.session.commit()
         flash("Payment method added.", "success")
-        return redirect(url_for("funds"))  # <- back to funds
+        return redirect(url_for("funds"))
 
     return render_template("payment_methods_add.html")
 
@@ -447,7 +542,7 @@ def set_default_payment_method(pm_id):
     pm.is_default = True
     db.session.commit()
     flash("Default payment method updated.", "success")
-    return redirect(url_for("funds"))  # <- back to funds
+    return redirect(url_for("funds"))
 
 @app.route("/payment-methods/delete/<int:pm_id>", methods=["POST"])
 @customer_required
@@ -462,7 +557,7 @@ def delete_payment_method(pm_id):
             new_default.is_default = True
             db.session.commit()
     flash("Payment method removed.", "info")
-    return redirect(url_for("funds"))  # <- back to funds
+    return redirect(url_for("funds"))
 
 @app.route("/profile", endpoint="profile")
 @login_required
@@ -484,6 +579,9 @@ def admin_dashboard():
 @app.route("/admin/update-stocks", methods=["POST"])
 @admin_required
 def update_stocks():
+    for stock in Stock.query_all():
+        pass 
+
     for stock in Stock.query.all():
         fields = {
             "company_name": request.form.get(f"company_name_{stock.id}"),
