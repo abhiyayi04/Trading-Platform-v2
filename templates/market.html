@@ -1,85 +1,68 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Stock Market</h1>
+<div class="container py-4">
+  <h1 class="mb-4">Stock Market</h1>
 
-<!-- Market status banner -->
-<div id="market-status" class="alert alert-info" style="display:none;"></div>
+  <!-- Market Status Banner -->
+  {% if not market_is_open() %}
+    <div class="alert alert-warning text-center">
+      <strong>Market Closed:</strong> Trading is currently unavailable.
+    </div>
+  {% else %}
+    <div class="alert alert-info text-center">
+      <strong>Market Open:</strong> You may place buy orders now.
+    </div>
+  {% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Company</th>
-      <th>Symbol</th>
-      <th>Price</th>
-      <th>Available Volume</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for stock in stocks %}
-    <tr>
-      <td>{{ stock.company_name }}</td>
-      <td>{{ stock.symbol }}</td>
-      <td>${{ "%.2f"|format(stock.price) }}</td>
-      <td>{{ "%.4f"|format(stock.volume) }}</td>
-      <td>
-        <!-- NOTE: new pending-order route -->
-        <form action="{{ url_for('order_buy', stock_id=stock.id) }}" method="POST" class="d-inline">
-          <input type="number" name="quantity" value="1" min="0.0001" step="0.0001"
-                 class="form-control d-inline trade-input" style="width: 100px;">
-          <button class="btn btn-primary btn-sm trade-submit">Buy</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+  <div class="table-responsive mt-4">
+    <table class="table table-striped align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Company</th>
+          <th>Symbol</th>
+          <th>Price</th>
+          <th>Available Volume</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for stock in stocks %}
+        <tr>
+          <td>{{ stock.company_name }}</td>
+          <td>{{ stock.symbol }}</td>
+          <td>${{ "%.2f"|format(stock.price) }}</td>
+          <td>{{ "%.2f"|format(stock.volume) }}</td>
+          <td>
+            <form action="{{ url_for('order_buy', stock_id=stock.id) }}" method="POST" class="d-inline">
+              <div class="input-group input-group-sm">
+                <input type="number"
+                       name="quantity"
+                       value="1"
+                       min="0.0001"
+                       step="0.0001"
+                       class="form-control"
+                       placeholder="Qty"
+                       {% if not market_is_open() %}disabled{% endif %}>
+                <button type="submit"
+                        class="btn btn-primary"
+                        {% if not market_is_open() %}disabled{% endif %}>
+                  Buy
+                </button>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">
+            No stocks available for trading.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-<a href="{{ url_for('portfolio') }}" class="btn btn-secondary">View Portfolio</a>
-
-<!-- Market-hours logic -->
-<script>
-(function () {
-  const OPEN  = "09:30";  
-  const CLOSE = "16:00";
-  const HOLIDAYS = [ "2025-01-01", "2025-07-04", "2025-12-25" ]; 
-
-  const statusDiv = document.getElementById("market-status");
-
-  function hhmmToMinutes(hhmm){ const [h,m]=hhmm.split(":").map(Number); return h*60+m; }
-  function toYMD(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-  function isWeekday(d){ const w=d.getDay(); return w!==0 && w!==6; }
-  function isHoliday(d){ return HOLIDAYS.includes(toYMD(d)); }
-  function isOpenNow(d=new Date()){
-    if (!isWeekday(d)) return false;
-    if (isHoliday(d)) return false;
-    const minutes = d.getHours()*60 + d.getMinutes();
-    return minutes >= hhmmToMinutes(OPEN) && minutes <= hhmmToMinutes(CLOSE);
-  }
-  function setDisabled(disabled){
-    document.querySelectorAll(".trade-input, .trade-submit").forEach(el=>{
-      el.disabled = disabled;
-      if (disabled) el.title = "Market closed. Try again during market hours.";
-      else el.removeAttribute("title");
-    });
-  }
-  function refresh(){
-    const open = isOpenNow();
-    setDisabled(!open);
-    statusDiv.style.display = "block";
-    if (open) {
-      statusDiv.classList.remove("alert-warning");
-      statusDiv.classList.add("alert-info");
-      statusDiv.textContent = " Market is open for trading.";
-    } else {
-      statusDiv.classList.remove("alert-info");
-      statusDiv.classList.add("alert-warning");
-      statusDiv.textContent = " The market is currently closed. Trading is available on weekdays between "
-        + OPEN + " and " + CLOSE + ".";
-    }
-  }
-  refresh();
-  setInterval(refresh, 30000);
-})();
-</script>
+  <a href="{{ url_for('portfolio') }}" class="btn btn-secondary mt-3">View Portfolio</a>
+</div>
 {% endblock %}

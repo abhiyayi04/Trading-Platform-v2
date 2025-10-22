@@ -1,25 +1,102 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container mt-5">
-  <h2>Change Market Hours</h2>
-  <form method="POST">
-    <div class="mb-3">
-      <label class="form-label">Market Open Time</label>
-      <input type="time" name="open_time" class="form-control">
+<div class="container mt-4">
+  <h3 class="mb-4">Change Market Settings</h3>
+
+  <div class="row">
+    <!-- LEFT COLUMN: Market Hours & Toggle -->
+    <div class="col-md-6">
+      <div class="card shadow-sm p-4 h-100">
+        <h5 class="mb-3">Market Hours</h5>
+
+        <form method="POST" class="mb-4">
+          <div class="mb-3">
+            <label class="form-label">Market Open Time</label>
+            <input type="time" name="open_time" class="form-control"
+                   value="{{ settings.open_time.strftime('%H:%M') if settings else '09:30' }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Market Close Time</label>
+            <input type="time" name="close_time" class="form-control"
+                   value="{{ settings.close_time.strftime('%H:%M') if settings else '16:00' }}" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 mb-3">Update Market Hours</button>
+        </form>
+
+        <form method="POST">
+          <input type="hidden" name="toggle_market" value="1">
+          {% if settings.is_open %}
+            <button type="submit" class="btn btn-danger w-100">Close Market</button>
+          {% else %}
+            <button type="submit" class="btn btn-success w-100">Open Market</button>
+          {% endif %}
+        </form>
+      </div>
     </div>
-    <div class="mb-3">
-      <label class="form-label">Market Close Time</label>
-      <input type="time" name="close_time" class="form-control">
+
+    <!-- RIGHT COLUMN: Closed Dates -->
+    <div class="col-md-6">
+      <div class="card shadow-sm p-4 h-100">
+        <h5 class="mb-3">Closed Dates</h5>
+        <form method="POST">
+          <div id="closed-dates-container">
+            {% set closed_list = (settings.closed_dates.split(',') if settings and settings.closed_dates else []) %}
+            {% for date_str in closed_list %}
+            <div class="mb-2 d-flex align-items-center">
+              <input type="date" name="closed_date_{{ loop.index }}" class="form-control me-2"
+                     value="{{ date_str.strip() }}">
+              <button type="button" class="btn btn-outline-danger btn-sm remove-date">&times;</button>
+            </div>
+            {% endfor %}
+          </div>
+
+          <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="add-date">+ Add Date</button>
+
+          <input type="hidden" name="closed_dates" id="closed-dates-hidden">
+
+          <button type="submit" class="btn btn-primary w-100">Update Closed Dates</button>
+        </form>
+      </div>
     </div>
-    <div class="mb-3">
-      <label class="form-label">Closed on Holidays?</label>
-      <select name="holidays" class="form-control">
-        <option value="yes">Yes</option>
-        <option value="no">No</option>
-      </select>
-    </div>
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
-  </form>
+  </div>
+
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-4">Back to Dashboard</a>
 </div>
+
+<!-- JavaScript for dynamic date fields -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("closed-dates-container");
+  const addBtn = document.getElementById("add-date");
+  const hiddenField = document.getElementById("closed-dates-hidden");
+
+  // Add new date input row
+  addBtn.addEventListener("click", () => {
+    const div = document.createElement("div");
+    div.classList.add("mb-2", "d-flex", "align-items-center");
+    div.innerHTML = `
+      <input type="date" class="form-control me-2" name="closed_date_new">
+      <button type="button" class="btn btn-outline-danger btn-sm remove-date">&times;</button>`;
+    container.appendChild(div);
+  });
+
+  // Remove a date input row
+  container.addEventListener("click", e => {
+    if (e.target.classList.contains("remove-date")) {
+      e.target.closest("div").remove();
+    }
+  });
+
+  // Before submitting, collect all date inputs
+  const form = container.closest("form");
+  form.addEventListener("submit", () => {
+    const dates = Array.from(container.querySelectorAll("input[type='date']"))
+      .map(input => input.value.trim())
+      .filter(v => v !== "");
+    hiddenField.value = dates.join(", ");
+  });
+});
+</script>
 {% endblock %}

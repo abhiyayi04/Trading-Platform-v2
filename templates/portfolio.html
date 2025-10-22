@@ -2,16 +2,27 @@
 {% block content %}
 <div class="container py-4">
 
+  <!-- Page Header -->
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Portfolio</h3>
     <div class="text-muted">Cash: ${{ "%.2f"|format(current_user.funds) }}</div>
   </div>
 
-  <div id="market-status" class="alert alert-info mb-3" style="display:none;"></div>
+  <!-- Market Status Banner -->
+  {% if not market_is_open() %}
+    <div class="alert alert-warning text-center">
+      <strong>Market Closed:</strong> You cannot sell stocks until the market reopens.
+    </div>
+  {% else %}
+    <div class="alert alert-info text-center">
+      <strong>Market Open:</strong> You may sell your holdings.
+    </div>
+  {% endif %}
 
-  <div class="table-responsive">
+  <!-- Portfolio Table -->
+  <div class="table-responsive mt-3">
     <table class="table table-striped align-middle">
-      <thead class="table-light">
+      <thead class="table-dark">
         <tr>
           <th>Company</th>
           <th>Symbol</th>
@@ -31,43 +42,34 @@
           <td class="text-end">${{ "%.2f"|format(h.quantity * h.stock.price) }}</td>
           <td>
             <form action="{{ url_for('order_sell', portfolio_id=h.id) }}" method="POST" class="d-flex gap-2">
-              <input type="number" name="quantity" step="0.0001" min="0.0001"
-                     max="{{ h.quantity }}" required class="form-control trade-input" placeholder="Qty">
-              <button class="btn btn-outline-primary btn-sm trade-submit" type="submit">Sell</button>
+              <input type="number"
+                     name="quantity"
+                     step="0.0001"
+                     min="0.0001"
+                     max="{{ h.quantity }}"
+                     required
+                     class="form-control"
+                     placeholder="Qty"
+                     {% if not market_is_open() %}disabled{% endif %}>
+              <button type="submit"
+                      class="btn btn-outline-primary btn-sm"
+                      {% if not market_is_open() %}disabled{% endif %}>
+                Sell
+              </button>
             </form>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">No holdings yet. Buy from the Market.</td></tr>
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            No holdings yet. <a href="{{ url_for('market') }}">Buy stocks from the Market</a>.
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <a href="{{ url_for('market') }}" class="btn btn-secondary mt-3">Back to Market</a>
 </div>
-
-<script>
-(function () {
-  const OPEN  = "09:30";
-  const CLOSE = "13:00";
-  const HOLIDAYS = ["2025-01-01", "2025-07-04", "2025-12-25"];
-
-  function hhmmToMin(h){const[x,y]=h.split(":").map(Number);return x*60+y;}
-  function ymd(d){return d.toISOString().split("T")[0];}
-  function isOpen(){
-    const d = new Date(), m=d.getHours()*60+d.getMinutes();
-    const wd=d.getDay();
-    if(wd===0||wd===6) return false;
-    if(HOLIDAYS.includes(ymd(d))) return false;
-    return m>=hhmmToMin(OPEN)&&m<=hhmmToMin(CLOSE);
-  }
-  function apply(){
-    const open=isOpen(), banner=document.getElementById("market-status");
-    document.querySelectorAll(".trade-input, .trade-submit").forEach(el=>el.disabled=!open);
-    banner.style.display="block";
-    if(open){banner.className="alert alert-info";banner.textContent="Market is OPEN for trading.";}
-    else{banner.className="alert alert-warning";banner.textContent="Market is CLOSED. Trading allowed only 9:30 AM – 4:00 PM, weekdays.";}
-  }
-  apply(); setInterval(apply,30000);
-})();
-</script>
 {% endblock %}

@@ -9,6 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 from datetime import datetime
 import atexit, os, random
+from datetime import time
 
 app = Flask(__name__)
 
@@ -20,7 +21,7 @@ def no_icon():
     return ('', 204)
 
 # ---------------- Configuration ---------------- #
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:password@localhost/stock_trading_db2"
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:Chikku04mysql@localhost/stock_trading_db2"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your-secret-key'
 
@@ -79,6 +80,15 @@ class PaymentMethod(db.Model):
     token = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     user = db.relationship("User", backref=db.backref("payment_methods", lazy=True))
+
+class MarketSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    open_time = db.Column(db.Time, default=time(9, 30))
+    close_time = db.Column(db.Time, default=time(16, 0))
+    is_open = db.Column(db.Boolean, default=True)
+    closed_dates = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
 # ---- Orders for PENDING / EXECUTED / CANCELED ----
 class OrderStatus:
@@ -230,6 +240,42 @@ def update_all_stock_prices():
         db.session.commit()
         print("Stock prices updated")
 
+def market_is_open():
+    settings = MarketSettings.query.first()
+    if not settings:
+        return False
+
+    if not settings.is_open:
+        return False
+
+    now = datetime.now()
+
+    if now.weekday() >= 5:
+        return False
+
+    default_holidays = {
+        "2025-01-01",  # New Year's Day
+        "2025-01-20",  # Martin Luther King Jr. Day
+        "2025-02-17",  # Presidents' Day
+        "2025-04-18",  # Good Friday
+        "2025-05-26",  # Memorial Day
+        "2025-06-19",  # Juneteenth
+        "2025-07-04",  # Independence Day
+        "2025-09-01",  # Labor Day
+        "2025-11-27",  # Thanksgiving Day
+        "2025-12-25",  # Christmas Day
+    }
+
+    closed_dates = {d.strip() for d in settings.closed_dates.split(",") if d.strip()}
+    all_closed = default_holidays.union(closed_dates)
+
+    if now.strftime("%Y-%m-%d") in all_closed:
+        return False
+
+    return settings.open_time <= now.time() <= settings.close_time
+
+app.jinja_env.globals.update(market_is_open=market_is_open)
+
 # scheduler
 scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(func=update_all_stock_prices, trigger="interval", seconds=30)
@@ -342,6 +388,10 @@ def order_sell(portfolio_id):
 @app.route("/order/execute/<int:order_id>", methods=["POST"])
 @customer_required
 def order_execute(order_id):
+    if not market_is_open():
+        flash("Market is closed! Orders can only be executed during open hours.", "warning")
+        return redirect(url_for("transactions"))
+    
     order = TradeOrder.query.get_or_404(order_id)
     if order.user_id != current_user.id and current_user.role != "admin":
         abort(403)
@@ -630,7 +680,63 @@ def delete_stock(stock_id):
 @app.route("/admin/change-market", methods=["GET", "POST"])
 @admin_required
 def change_market():
-    return render_template("change_market.html")
+    settings = MarketSettings.query.first()
+    if not settings:
+        settings = MarketSettings()
+        db.session.add(settings)
+        db.session.commit()
+
+    if request.method == "POST":
+        if "toggle_market" in request.form:
+            settings.is_open = not settings.is_open
+            db.session.commit()
+            flash(f"Market {'opened' if settings.is_open else 'closed'} successfully!", "info")
+            return redirect(url_for("change_market"))
+
+        elif "open_time" in request.form and "close_time" in request.form:
+            try:
+                open_time = datetime.strptime(request.form["open_time"], "%H:%M").time()
+                close_time = datetime.strptime(request.form["close_time"], "%H:%M").time()
+                settings.open_time = open_time
+                settings.close_time = close_time
+                db.session.commit()
+                flash("Market hours updated successfully!", "success")
+                return redirect(url_for("change_market"))
+            except Exception:
+                flash("Invalid time format. Please enter valid times.", "danger")
+                return redirect(url_for("change_market"))
+
+        elif "closed_dates" in request.form:
+            closed_dates_str = request.form.get("closed_dates", "").strip()
+            if closed_dates_str:
+                try:
+                    dates = []
+                    for d in closed_dates_str.split(","):
+                        d = d.strip()
+                        if not d:
+                            continue
+                        parsed = datetime.strptime(d, "%Y-%m-%d")
+                        dates.append(parsed.strftime("%Y-%m-%d"))
+                    settings.closed_dates = ", ".join(dates)
+                except ValueError:
+                    flash("Invalid date format. Please select dates using the date picker.", "danger")
+                    return redirect(url_for("change_market"))
+            else:
+                settings.closed_dates = ""
+
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            closed_set = set(d.strip() for d in settings.closed_dates.split(",") if d.strip())
+
+            if today_str not in closed_set and not settings.is_open:
+                settings.is_open = True
+                flash("Today was removed from closed dates — market automatically reopened.", "info")
+
+            db.session.commit()
+            flash("Closed dates updated successfully!", "success")
+            return redirect(url_for("change_market"))
+
+    return render_template("change_market.html", settings=settings)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
