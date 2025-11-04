@@ -10,10 +10,10 @@ from functools import wraps
 from datetime import datetime
 import atexit, os, random
 from datetime import time
+from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 
 app = Flask(__name__)
 
-# silence missing icon requests
 @app.route('/favicon.ico')
 @app.route('/apple-touch-icon.png')
 @app.route('/apple-touch-icon-precomposed.png')
@@ -21,8 +21,8 @@ def no_icon():
     return ('', 204)
 
 # ---------------- Configuration ---------------- #
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:Chikku04mysql@localhost/stock_trading_db2"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 app.config['SECRET_KEY'] = 'your-secret-key'
 
 db = SQLAlchemy(app)
@@ -90,7 +90,7 @@ class MarketSettings(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
-# ---- Orders for PENDING / EXECUTED / CANCELED ----
+# ---- Orders for PENDING / EXECUTED / CANCELED ---- #
 class OrderStatus:
     PENDING = "PENDING"
     EXECUTED = "EXECUTED"
@@ -144,7 +144,7 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
     return wrapped
 
-# --- order helpers ---
+# --- order helpers --- #
 def place_order(user: User, stock: Stock, side: str, qty: float) -> TradeOrder:
     if qty <= 0:
         raise ValueError("Quantity must be positive")
@@ -532,7 +532,7 @@ def api_withdraw_funds():
     db.session.commit()
     return jsonify(ok=True, balance=current_user.funds, message=f"Withdrew ${amount:,.2f}")
 
-# ===== Payment method management ===== #
+# ---- Payment method management ---- #
 @app.route("/payment-methods", endpoint="payment_methods")
 @customer_required
 def payment_methods():

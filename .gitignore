@@ -1,4 +1,4 @@
-# ✅ Virtual environment (this is the most important for you)
+
 venv/
 .venv/
 env/
@@ -6,30 +6,30 @@ ENV/
 env.bak/
 venv.bak/
 
-# ✅ Python cache/compiled files
+
 __pycache__/
 *.py[cod]
 *$py.class
 
-# ✅ Environment variables / secrets
+
 .env
 *.env
 
-# ✅ SQLite databases (in case you test locally with SQLite)
+
 *.db
 *.sqlite3
 
-# ✅ Logs and coverage
+
 *.log
 *.coverage
 *.cover
 coverage.xml
 
-# ✅ IDE / Editor settings
+
 .vscode/
 .idea/
 *.swp
 
-# ✅ OS files
+
 .DS_Store
 Thumbs.db

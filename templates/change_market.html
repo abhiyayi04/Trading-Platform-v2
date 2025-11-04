@@ -65,7 +65,7 @@
   <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-4">Back to Dashboard</a>
 </div>
 
-<!-- JavaScript for dynamic date fields -->
+<!-- dynamic date fields -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.getElementById("closed-dates-container");
@@ -89,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Before submitting, collect all date inputs
+  //collect all date inputs
   const form = container.closest("form");
   form.addEventListener("submit", () => {
     const dates = Array.from(container.querySelectorAll("input[type='date']"))

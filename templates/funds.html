@@ -7,7 +7,7 @@
       <p class="lead">Current Balance: <strong>${{ "%.2f"|format(user.funds) }}</strong></p>
 
       <div class="row g-3">
-        <!-- ===== LEFT: DEPOSIT ===== -->
+        <!-- LEFT: DEPOSIT -->
         <div class="col-md-6">
           <form id="deposit-form" class="row g-2" method="POST" action="{{ url_for('deposit_funds') }}">
             <div class="col-12">
@@ -92,7 +92,7 @@
           {% endif %}
         </div>
 
-        <!-- ===== RIGHT: WITHDRAW ===== -->
+        <!-- RIGHT: WITHDRAW -->
         <div class="col-md-6">
           <form class="row g-2" method="POST" action="{{ url_for('withdraw_funds') }}">
             <div class="col-12">
