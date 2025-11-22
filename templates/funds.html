@@ -7,7 +7,6 @@
       <p class="lead">Current Balance: <strong>${{ "%.2f"|format(user.funds) }}</strong></p>
 
       <div class="row g-3">
-        <!-- LEFT: DEPOSIT -->
         <div class="col-md-6">
           <form id="deposit-form" class="row g-2" method="POST" action="{{ url_for('deposit_funds') }}">
             <div class="col-12">
@@ -61,7 +60,6 @@
             </div>
           </form>
 
-          <!-- Card management -->
           {% if methods and methods|length > 0 %}
             <div class="mt-3">
               {% for m in methods %}
@@ -92,7 +90,6 @@
           {% endif %}
         </div>
 
-        <!-- RIGHT: WITHDRAW -->
         <div class="col-md-6">
           <form class="row g-2" method="POST" action="{{ url_for('withdraw_funds') }}">
             <div class="col-12">

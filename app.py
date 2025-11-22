@@ -238,7 +238,6 @@ def update_all_stock_prices():
         for stock in Stock.query.all():
             stock.price = update_price(stock.price)
         db.session.commit()
-        print("Stock prices updated")
 
 def market_is_open():
     settings = MarketSettings.query.first()

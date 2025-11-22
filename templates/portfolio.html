@@ -1,75 +1,94 @@
 {% extends "base.html" %}
 {% block content %}
+
 <div class="container py-4">
 
-  <!-- Page Header -->
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Portfolio</h3>
-    <div class="text-muted">Cash: ${{ "%.2f"|format(current_user.funds) }}</div>
-  </div>
-
-  <!-- Market Status Banner -->
-  {% if not market_is_open() %}
-    <div class="alert alert-warning text-center">
-      <strong>Market Closed:</strong> You cannot sell stocks until the market reopens.
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-white mb-0">Portfolio</h3>
+        <div class="text-muted">Cash: ${{ "%.2f"|format(current_user.funds) }}</div>
     </div>
-  {% else %}
-    <div class="alert alert-info text-center">
-      <strong>Market Open:</strong> You may sell your holdings.
+
+    {% if not market_is_open() %}
+        <div class="alert text-center mb-4"
+             style="background-color:#392f00; border:1px solid #5a4f00; color:#f7d76a;">
+            <strong>Market Closed:</strong> You cannot sell stocks until the market reopens.
+        </div>
+    {% else %}
+        <div class="alert text-center mb-4"
+             style="background-color:#0f253a; border:1px solid #1f4d78; color:#9acbff;">
+            <strong>Market Open:</strong> You may sell your holdings.
+        </div>
+    {% endif %}
+
+    <div class="table-responsive mt-3">
+        <table class="table table-striped align-middle"
+               style="background-color:white; color:black; border-radius:8px; overflow:hidden;">
+
+            <thead style="background-color:#1f242d; color:#e6e6e6;">
+                <tr>
+                    <th>Company</th>
+                    <th>Symbol</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Current Price</th>
+                    <th class="text-end">Market Value</th>
+                    <th class="text-center">Sell</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for h in current_user.portfolio %}
+                <tr>
+                    <td>{{ h.stock.company_name }}</td>
+                    <td>{{ h.stock.symbol }}</td>
+                    <td class="text-end">{{ "%.2f"|format(h.quantity) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(h.stock.price) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(h.quantity * h.stock.price) }}</td>
+
+                    <td>
+                        <form action="{{ url_for('order_sell', portfolio_id=h.id) }}"
+                              method="POST" class="d-flex gap-2 justify-content-center">
+
+                            <input type="number"
+                                   name="quantity"
+                                   step="0.0001"
+                                   min="0.0001"
+                                   max="{{ h.quantity }}"
+                                   required
+                                   placeholder="Qty"
+                                   class="form-control"
+                                   style="max-width:90px; background-color:white; color:black; border-color:#d0d7de;"
+                                   {% if not market_is_open() %}disabled{% endif %}>
+
+                            <button type="submit"
+                                    class="btn btn-primary btn-sm"
+                                    style="padding-left:18px; padding-right:18px;"
+                                    {% if not market_is_open() %}disabled{% endif %}>
+                                Sell
+                            </button>
+
+                        </form>
+                    </td>
+                </tr>
+
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        No holdings yet.
+                        <a href="{{ url_for('market') }}" style="color:#58a6ff;">Buy stocks from the Market</a>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
     </div>
-  {% endif %}
 
-  <!-- Portfolio Table -->
-  <div class="table-responsive mt-3">
-    <table class="table table-striped align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Company</th>
-          <th>Symbol</th>
-          <th class="text-end">Qty</th>
-          <th class="text-end">Current Price</th>
-          <th class="text-end">Market Value</th>
-          <th style="width: 220px;">Sell</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for h in current_user.portfolio %}
-        <tr>
-          <td>{{ h.stock.company_name }}</td>
-          <td>{{ h.stock.symbol }}</td>
-          <td class="text-end">{{ "%.2f"|format(h.quantity) }}</td>
-          <td class="text-end">${{ "%.2f"|format(h.stock.price) }}</td>
-          <td class="text-end">${{ "%.2f"|format(h.quantity * h.stock.price) }}</td>
-          <td>
-            <form action="{{ url_for('order_sell', portfolio_id=h.id) }}" method="POST" class="d-flex gap-2">
-              <input type="number"
-                     name="quantity"
-                     step="0.0001"
-                     min="0.0001"
-                     max="{{ h.quantity }}"
-                     required
-                     class="form-control"
-                     placeholder="Qty"
-                     {% if not market_is_open() %}disabled{% endif %}>
-              <button type="submit"
-                      class="btn btn-outline-primary btn-sm"
-                      {% if not market_is_open() %}disabled{% endif %}>
-                Sell
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="text-center text-muted py-4">
-            No holdings yet. <a href="{{ url_for('market') }}">Buy stocks from the Market</a>.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <a href="{{ url_for('market') }}"
+       class="btn mt-3"
+       style="background-color:#30363d; color:white; border:none;">
+        Back to Market
+    </a>
 
-  <a href="{{ url_for('market') }}" class="btn btn-secondary mt-3">Back to Market</a>
 </div>
+
 {% endblock %}
