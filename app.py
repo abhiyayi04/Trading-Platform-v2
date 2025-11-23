@@ -41,7 +41,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(250), nullable=False)
     role = db.Column(db.String(50), default="customer", nullable=False)
-    funds = db.Column(db.Float, default=10000.0)
+    funds = db.Column(db.Float, default=0.0)
 
     portfolio = db.relationship("Portfolio", backref="user", lazy=True)
 
@@ -86,6 +86,7 @@ class MarketSettings(db.Model):
     open_time = db.Column(db.Time, default=time(9, 30))
     close_time = db.Column(db.Time, default=time(16, 0))
     is_open = db.Column(db.Boolean, default=True)
+    admin_override = db.Column(db.Boolean, default=False)  # NEW
     closed_dates = db.Column(db.Text, default="")
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
@@ -244,31 +245,34 @@ def market_is_open():
     if not settings:
         return False
 
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+
+    if settings.admin_override:
+        return settings.is_open 
+
     if not settings.is_open:
         return False
-
-    now = datetime.now()
 
     if now.weekday() >= 5:
         return False
 
     default_holidays = {
-        "2025-01-01",  # New Year's Day
-        "2025-01-20",  # Martin Luther King Jr. Day
-        "2025-02-17",  # Presidents' Day
-        "2025-04-18",  # Good Friday
-        "2025-05-26",  # Memorial Day
-        "2025-06-19",  # Juneteenth
-        "2025-07-04",  # Independence Day
-        "2025-09-01",  # Labor Day
-        "2025-11-27",  # Thanksgiving Day
-        "2025-12-25",  # Christmas Day
+        "2025-01-01",
+        "2025-01-20",
+        "2025-02-17",
+        "2025-04-18",
+        "2025-05-26",
+        "2025-06-19",
+        "2025-07-04",
+        "2025-09-01",
+        "2025-11-27",
+        "2025-12-25",
     }
 
     closed_dates = {d.strip() for d in settings.closed_dates.split(",") if d.strip()}
-    all_closed = default_holidays.union(closed_dates)
 
-    if now.strftime("%Y-%m-%d") in all_closed:
+    if today_str in default_holidays or today_str in closed_dates:
         return False
 
     return settings.open_time <= now.time() <= settings.close_time
@@ -686,10 +690,17 @@ def change_market():
         db.session.commit()
 
     if request.method == "POST":
+        if "clear_override" in request.form:
+            settings.admin_override = False
+            db.session.commit()
+            flash("Admin override disabled. Market is back to normal schedule.", "info")
+            return redirect(url_for("change_market"))
+        
         if "toggle_market" in request.form:
+            settings.admin_override = True
             settings.is_open = not settings.is_open
             db.session.commit()
-            flash(f"Market {'opened' if settings.is_open else 'closed'} successfully!", "info")
+            flash(f"Market manually {'opened' if settings.is_open else 'closed'} by admin.", "info")
             return redirect(url_for("change_market"))
 
         elif "open_time" in request.form and "close_time" in request.form:

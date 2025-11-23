@@ -17,17 +17,19 @@
 
           <div class="mb-3">
             <label class="form-label" style="color:black;">Market Open Time</label>
-            <input type="time" name="open_time"
+            <input type="time"
+                   name="open_time"
                    class="form-control fund-input"
-                   value="{{ settings.open_time.strftime('%H:%M') if settings else '09:30' }}"
+                   value="{{ settings.open_time.strftime('%H:%M') }}"
                    required>
           </div>
 
           <div class="mb-3">
             <label class="form-label" style="color:black;">Market Close Time</label>
-            <input type="time" name="close_time"
+            <input type="time"
+                   name="close_time"
                    class="form-control fund-input"
-                   value="{{ settings.close_time.strftime('%H:%M') if settings else '16:00' }}"
+                   value="{{ settings.close_time.strftime('%H:%M') }}"
                    required>
           </div>
 
@@ -59,12 +61,13 @@
         <form method="POST">
 
           <div id="closed-dates-container">
-            {% set closed_list = (settings.closed_dates.split(',') if settings and settings.closed_dates else []) %}
+            {% set closed_list = (settings.closed_dates.split(',') if settings.closed_dates else []) %}
             {% for date_str in closed_list %}
               <div class="mb-2 d-flex align-items-center">
-                <input type="date" class="form-control fund-input me-2"
+                <input type="date"
                        name="closed_date_{{ loop.index }}"
-                       value="{{ date_str.strip() }}">
+                       value="{{ date_str.strip() }}"
+                       class="form-control fund-input me-2">
                 <button type="button" class="btn btn-outline-danger btn-sm remove-date">&times;</button>
               </div>
             {% endfor %}
@@ -122,4 +125,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
+
 {% endblock %}
