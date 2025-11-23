@@ -1,12 +1,12 @@
 import os
 
-#DB_USERNAME = "admin"
-#DB_PASSWORD = "password"
-#DB_HOST = "stock-db.c8fkq4uecfai.us-east-1.rds.amazonaws.com" 
+DB_USERNAME = "admin"
+DB_PASSWORD = "password"
+DB_HOST = "stock-db.c8fkq4uecfai.us-east-1.rds.amazonaws.com" 
 
-DB_USERNAME = "root"
-DB_PASSWORD = "Chikku04mysql"
-DB_HOST = "127.0.0.1" 
+#DB_USERNAME = "root"
+#DB_PASSWORD = "password"
+#DB_HOST = "127.0.0.1" 
 
 DB_PORT = "3306"
 DB_NAME = "stock_trading_db2"
