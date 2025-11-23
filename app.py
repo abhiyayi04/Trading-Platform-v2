@@ -205,7 +205,7 @@ def execute_order(order_id: int):
                    note=f"SELL {qty} {stock.symbol} @ ${order.price_locked:.2f}")
 
     order.status = OrderStatus.EXECUTED
-    order.executed_at = datetime.utcnow()
+    order.executed_at = datetime.now()
     db.session.commit()
     return True, "Order executed."
 
@@ -214,7 +214,7 @@ def cancel_order(order_id: int):
     if order.status != OrderStatus.PENDING:
         return False, "Only pending orders can be canceled."
     order.status = OrderStatus.CANCELED
-    order.canceled_at = datetime.utcnow()
+    order.canceled_at = datetime.now()
     db.session.commit()
     return True, "Order canceled."
 

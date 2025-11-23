@@ -31,15 +31,22 @@
               {% if o.side == "BUY" %}
                 <span class="badge bg-primary">BUY</span>
               {% else %}
-                <span class="badge bg-info text-dark">SELL</span>
+                <span class="badge bg-danger">SELL</span>
               {% endif %}
             </td>
             <td class="text-end">{{ "%.4f"|format(o.quantity) }}</td>
-            <td class="text-end">${{ "%.2f"|format(o.price_locked) }}</td>
+            <td class="text-end">
+              {% if o.side == "BUY" %}
+                <span class="text-success">+${{ "%.2f"|format(o.price_locked) }}</span>
+              {% else %}
+                <span class="text-danger">-${{ "%.2f"|format(o.price_locked) }}</span>
+              {% endif %}
+            </td>
             <td class="text-end">${{ "%.2f"|format(o.price_locked * o.quantity) }}</td>
             <td>
               {% if o.status == "PENDING" %}
                 <span class="badge bg-warning text-dark">PENDING</span>
+                <div><small class="text-muted">{{ o.created_at.strftime("%Y-%m-%d %H:%M:%S") if o.created_at else "" }}</small></div>
               {% elif o.status == "EXECUTED" %}
                 <span class="badge bg-success">EXECUTED</span>
                 <div><small class="text-muted">{{ o.executed_at.strftime("%Y-%m-%d %H:%M:%S") if o.executed_at else "" }}</small></div>
@@ -56,8 +63,10 @@
                 <form method="post" action="{{ url_for('order_cancel', order_id=o.id) }}" class="d-inline">
                   <button class="btn btn-sm btn-outline-danger">Cancel</button>
                 </form>
+              {% elif o.status == "EXECUTED" %}
+                <small class="text-muted">No further actions</small>
               {% else %}
-                <span class="text-muted">—</span>
+                <small class="text-muted">Order canceled</small>
               {% endif %}
             </td>
           </tr>
@@ -89,11 +98,11 @@
               {% if t.type == "DEPOSIT" %}
                 <span class="badge bg-success">DEPOSIT</span>
               {% elif t.type == "WITHDRAW" %}
-                <span class="badge bg-danger">WITHDRAW</span>
+                <span class="badge bg-warning text-dark">WITHDRAW</span>
               {% elif t.type == "BUY" %}
                 <span class="badge bg-primary">BUY</span>
               {% elif t.type == "SELL" %}
-                <span class="badge bg-info text-dark">SELL</span>
+                <span class="badge bg-danger">SELL</span>
               {% else %}
                 {{ t.type }}
               {% endif %}
