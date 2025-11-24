@@ -14,11 +14,6 @@ from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 
 app = Flask(__name__)
 
-@app.route('/favicon.ico')
-@app.route('/apple-touch-icon.png')
-@app.route('/apple-touch-icon-precomposed.png')
-def no_icon():
-    return ('', 204)
 
 # ---------------- Configuration ---------------- #
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
@@ -86,12 +81,11 @@ class MarketSettings(db.Model):
     open_time = db.Column(db.Time, default=time(9, 30))
     close_time = db.Column(db.Time, default=time(16, 0))
     is_open = db.Column(db.Boolean, default=True)
-    admin_override = db.Column(db.Boolean, default=False)  # NEW
+    admin_override = db.Column(db.Boolean, default=False)
     closed_dates = db.Column(db.Text, default="")
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
-# ---- Orders for PENDING / EXECUTED / CANCELED ---- #
 class OrderStatus:
     PENDING = "PENDING"
     EXECUTED = "EXECUTED"
@@ -240,6 +234,7 @@ def update_all_stock_prices():
             stock.price = update_price(stock.price)
         db.session.commit()
 
+# ------------- MARKET SETTINGS ---------------- #
 def market_is_open():
     settings = MarketSettings.query.first()
     if not settings:
@@ -281,7 +276,7 @@ app.jinja_env.globals.update(market_is_open=market_is_open)
 
 # scheduler
 scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(func=update_all_stock_prices, trigger="interval", seconds=30)
+scheduler.add_job(func=update_all_stock_prices, trigger="interval", seconds=10)
 if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
@@ -489,52 +484,6 @@ def withdraw_funds():
     flash(f"Withdrew ${amount:,.2f}", "success")
     return redirect(url_for("funds"))
 
-# -------- Funds actions-------- #
-@app.route("/api/funds/deposit", methods=["POST"])
-@customer_required
-def api_deposit_funds():
-    if not request.is_json:
-        return jsonify(ok=False, message="Invalid request"), 400
-    try:
-        amount = float(request.json.get("amount", 0))
-    except Exception:
-        return jsonify(ok=False, message="Invalid amount"), 400
-    if amount <= 0:
-        return jsonify(ok=False, message="Deposit must be greater than 0"), 400
-
-    pm_id = request.json.get("payment_method_id")
-    if pm_id:
-        pm = PaymentMethod.query.filter_by(id=pm_id, user_id=current_user.id).first()
-    else:
-        pm = PaymentMethod.query.filter_by(user_id=current_user.id, is_default=True).first()
-    if not pm:
-        return jsonify(ok=False, message="No payment method on file"), 400
-
-    current_user.funds = round(current_user.funds + amount, 2)
-    record_txn(current_user.id, "DEPOSIT", amount, current_user.funds,
-               note=f"Deposit via {pm.brand} ••••{pm.last4}")
-    db.session.commit()
-    return jsonify(ok=True, balance=current_user.funds, message=f"Deposited ${amount:,.2f}")
-
-@app.route("/api/funds/withdraw", methods=["POST"])
-@customer_required
-def api_withdraw_funds():
-    if not request.is_json:
-        return jsonify(ok=False, message="Invalid request"), 400
-    try:
-        amount = float(request.json.get("amount", 0))
-    except Exception:
-        return jsonify(ok=False, message="Invalid amount"), 400
-    if amount <= 0:
-        return jsonify(ok=False, message="Withdrawal must be greater than 0"), 400
-    if amount > current_user.funds:
-        return jsonify(ok=False, message="Insufficient funds"), 400
-
-    current_user.funds = round(current_user.funds - amount, 2)
-    record_txn(current_user.id, "WITHDRAW", amount, current_user.funds, note="User withdrawal")
-    db.session.commit()
-    return jsonify(ok=True, balance=current_user.funds, message=f"Withdrew ${amount:,.2f}")
-
 # ---- Payment method management ---- #
 @app.route("/payment-methods", endpoint="payment_methods")
 @customer_required
@@ -628,28 +577,6 @@ def profile():
 def admin_dashboard():
     stocks = Stock.query.all()
     return render_template("admin_dashboard.html", stocks=stocks)
-
-@app.route("/admin/update-stocks", methods=["POST"])
-@admin_required
-def update_stocks():
-    for stock in Stock.query_all():
-        pass 
-
-    for stock in Stock.query.all():
-        fields = {
-            "company_name": request.form.get(f"company_name_{stock.id}"),
-            "symbol": request.form.get(f"symbol_{stock.id}"),
-            "price": request.form.get(f"price_{stock.id}"),
-            "volume": request.form.get(f"volume_{stock.id}")
-        }
-        if fields["company_name"]: stock.company_name = fields["company_name"]
-        if fields["symbol"]:       stock.symbol = fields["symbol"].upper().strip()
-        if fields["price"] is not None and fields["price"] != "":  stock.price = float(fields["price"])
-        if fields["volume"] is not None and fields["volume"] != "": stock.volume = float(fields["volume"])
-
-    db.session.commit()
-    flash("Stocks updated successfully!", "success")
-    return redirect(url_for("admin_dashboard"))
 
 @app.route("/admin/create-stock", methods=["GET", "POST"])
 @admin_required
