@@ -12,16 +12,17 @@ import atexit, os, random
 from datetime import time
 from config import SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 app = Flask(__name__)
-DISABLE_OLD_UI = True
+load_dotenv()
 
 CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "http://localhost:5173"}})
 
 # ---------------- Configuration ---------------- #
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
@@ -121,8 +122,6 @@ class TradeOrder(db.Model):
     stock = db.relationship("Stock")
 
 # ---------------- Helpers ---------------- #
-def ui_disabled():
-    return jsonify({"error": "UI_DISABLED_USE_REACT"}), 404
 
 def record_txn(user_id: int, txn_type: str, amount: float, balance_after: float, note: str = None):
     t = FinancialTransaction(
@@ -239,7 +238,7 @@ with app.app_context():
 # ---------------- Flask-Login user loader ---------------- #
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # ---------------- RANDOM PRICE GENERATOR ---------------- #
 def update_price(current_price: float, drift: float = 0.0005) -> float:
@@ -350,435 +349,7 @@ if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
 
-# ---------------- AUTH ROUTES ---------------- #
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        hashed_password = bcrypt.generate_password_hash(request.form["password"]).decode("utf-8")
-        new_user = User(
-            full_name=request.form["full_name"],
-            name=request.form["username"],
-            email=request.form["email"],
-            password=hashed_password,
-            role="customer"
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        flash("Account created! Please log in.", "success")
-        return redirect(url_for("login"))
-    return render_template("sign_up.html")
-
-@app.route("/admin-register", methods=["GET", "POST"])
-def admin_register():
-    if request.method == "POST":
-        admin_key = request.form["admin_key"]
-        if admin_key != "MY_SECRET_ADMIN_KEY":
-            flash("Invalid admin key!", "danger")
-            return redirect(url_for("admin_register"))
-
-        hashed_password = bcrypt.generate_password_hash(request.form["password"]).decode("utf-8")
-        new_admin = User(
-            full_name=request.form["full_name"],
-            name=request.form["username"],
-            email=request.form["email"],
-            password=hashed_password,
-            role="admin"
-        )
-        db.session.add(new_admin)
-        db.session.commit()
-        flash("Admin account created! Please log in.", "success")
-        return redirect(url_for("login"))
-    return render_template("admin_sign_up.html")
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    #if DISABLE_OLD_UI:
-    #    return ui_disabled()
-    if request.method == "POST":
-        user = User.query.filter_by(email=request.form["email"]).first()
-        if user and bcrypt.check_password_hash(user.password, request.form["password"]):
-            login_user(user)
-            flash("Logged in successfully!", "success")
-            return redirect(url_for("home"))
-        flash("Invalid credentials", "danger")
-    return render_template("login.html")
-
-@app.route("/logout")
-@login_required
-def logout():
-    #if DISABLE_OLD_UI:
-    #    return ui_disabled()
-    logout_user()
-    flash("You have been logged out.", "info")
-    return redirect(url_for("login"))
-
-# ---------------- ROLE-BASED LANDING ---------------- #
-@app.route("/")
-@login_required
-def home():
-    #if DISABLE_OLD_UI:
-        #return ui_disabled()
-    return redirect(url_for("admin_dashboard" if current_user.role == "admin" else "portfolio"))
-
-# ---------------- CUSTOMER ROUTES ---------------- #
-@app.route("/market")
-@customer_required
-def market():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    stocks = Stock.query.all()
-    return render_template("market.html", stocks=stocks)
-
-@app.route("/portfolio")
-@customer_required
-def portfolio():
-    #if DISABLE_OLD_UI:
-    #    return ui_disabled()
-    return render_template("portfolio.html", user=current_user)
-
-# ------------ ORDER ROUTES ------------
-@app.route("/order/buy/<int:stock_id>", methods=["POST"])
-@customer_required
-def order_buy(stock_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    stock = Stock.query.get_or_404(stock_id)
-    qty = float(request.form["quantity"])
-    try:
-        order = place_order(current_user, stock, OrderSide.BUY, qty)
-        flash(f"Buy order placed: {qty} {stock.symbol} @ ${order.price_locked:.2f} (PENDING)", "info")
-    except Exception as e:
-        flash(str(e), "danger")
-    return redirect(url_for("market"))
-
-@app.route("/order/sell/<int:portfolio_id>", methods=["POST"])
-@customer_required
-def order_sell(portfolio_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    holding = Portfolio.query.get_or_404(portfolio_id)
-    qty = float(request.form["quantity"])
-    stock = holding.stock
-    try:
-        order = place_order(current_user, stock, OrderSide.SELL, qty)
-        flash(f"Sell order placed: {qty} {stock.symbol} @ ${order.price_locked:.2f} (PENDING)", "info")
-    except Exception as e:
-        flash(str(e), "danger")
-    return redirect(url_for("portfolio"))
-
-@app.route("/order/execute/<int:order_id>", methods=["POST"])
-@customer_required
-def order_execute(order_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    if not market_is_open():
-        flash("Market is closed! Orders can only be executed during open hours.", "warning")
-        return redirect(url_for("transactions"))
-    
-    order = TradeOrder.query.get_or_404(order_id)
-    if order.user_id != current_user.id and current_user.role != "admin":
-        abort(403)
-    ok, msg = execute_order(order_id)
-    flash(msg, "success" if ok else "danger")
-    return redirect(url_for("transactions"))
-
-@app.route("/order/cancel/<int:order_id>", methods=["POST"])
-@customer_required
-def order_cancel(order_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    order = TradeOrder.query.get_or_404(order_id)
-    if order.user_id != current_user.id and current_user.role != "admin":
-        abort(403)
-    ok, msg = cancel_order(order_id)
-    flash(msg, "success" if ok else "danger")
-    return redirect(url_for("transactions"))
-
-# -------- Transactions -------- #
-@app.route("/transactions", endpoint="transactions")
-@customer_required
-def transactions():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    orders = (TradeOrder.query
-              .filter_by(user_id=current_user.id)
-              .order_by(TradeOrder.created_at.desc()).all())
-    txns = (FinancialTransaction.query
-            .filter_by(user_id=current_user.id)
-            .order_by(FinancialTransaction.created_at.desc()).all())
-    return render_template("transactions.html", orders=orders, txns=txns)
-
-# -------- Funds pages & actions-------- #
-@app.route("/funds", methods=["GET"])
-@customer_required
-def funds():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    recent_txns = FinancialTransaction.query.filter_by(user_id=current_user.id)\
-        .order_by(FinancialTransaction.created_at.desc()).limit(10).all()
-    methods = PaymentMethod.query.filter_by(user_id=current_user.id)\
-        .order_by(PaymentMethod.is_default.desc(), PaymentMethod.created_at.desc()).all()
-    return render_template("funds.html", user=current_user, recent_txns=recent_txns, methods=methods)
-
-@app.route("/funds/deposit", methods=["POST"])
-@customer_required
-def deposit_funds():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    try:
-        amount = float(request.form.get("amount", "0").strip())
-    except Exception:
-        flash("Invalid amount.", "danger")
-        return redirect(url_for("funds"))
-
-    if amount <= 0:
-        flash("Deposit must be greater than 0.", "warning")
-        return redirect(url_for("funds"))
-
-    pm_id = request.form.get("payment_method_id")
-    if pm_id:
-        pm = PaymentMethod.query.filter_by(id=pm_id, user_id=current_user.id).first()
-    else:
-        pm = PaymentMethod.query.filter_by(user_id=current_user.id, is_default=True).first()
-
-    if not pm:
-        flash("Please add a payment method before depositing.", "warning")
-        return redirect(url_for("add_payment_method"))
-
-    current_user.funds = round(current_user.funds + amount, 2)
-    record_txn(current_user.id, "DEPOSIT", amount, current_user.funds,
-               note=f"Deposit via {pm.brand} ••••{pm.last4}")
-    db.session.commit()
-
-    flash(f"Deposited ${amount:,.2f}", "success")
-    return redirect(url_for("funds"))
-
-@app.route("/funds/withdraw", methods=["POST"])
-@customer_required
-def withdraw_funds():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    try:
-        amount = float(request.form.get("amount", "0").strip())
-    except Exception:
-        flash("Invalid amount.", "danger")
-        return redirect(url_for("funds"))
-
-    if amount <= 0:
-        flash("Withdrawal must be greater than 0.", "warning")
-        return redirect(url_for("funds"))
-
-    if amount > current_user.funds:
-        flash("Insufficient funds.", "danger")
-        return redirect(url_for("funds"))
-
-    current_user.funds = round(current_user.funds - amount, 2)
-    record_txn(current_user.id, "WITHDRAW", amount, current_user.funds, note="User withdrawal")
-    db.session.commit()
-
-    flash(f"Withdrew ${amount:,.2f}", "success")
-    return redirect(url_for("funds"))
-
-# ---- Payment method management ---- #
-@app.route("/payment-methods", endpoint="payment_methods")
-@customer_required
-def payment_methods():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    return redirect(url_for("add_payment_method"))
-
-@app.route("/payment-methods/add", methods=["GET", "POST"])
-@customer_required
-def add_payment_method():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    if request.method == "POST":
-        brand = (request.form.get("brand") or "").strip().title()
-        last4 = (request.form.get("last4") or "").strip()
-        exp_month = request.form.get("exp_month")
-        exp_year = request.form.get("exp_year")
-        token = (request.form.get("token") or "").strip() 
-
-        try:
-            exp_month = int(exp_month)
-            exp_year = int(exp_year)
-        except Exception:
-            flash("Invalid expiry.", "danger")
-            return redirect(url_for("add_payment_method"))
-
-        if brand not in {"Visa", "Mastercard", "Amex", "Discover"}:
-            flash("Choose a valid brand.", "danger")
-            return redirect(url_for("add_payment_method"))
-
-        if not (last4.isdigit() and len(last4) == 4):
-            flash("Enter last 4 digits only.", "danger")
-            return redirect(url_for("add_payment_method"))
-
-        count = PaymentMethod.query.filter_by(user_id=current_user.id).count()
-        make_default = bool(request.form.get("is_default")) or count == 0
-        if make_default:
-            PaymentMethod.query.filter_by(user_id=current_user.id, is_default=True).update({"is_default": False})
-
-        pm = PaymentMethod(
-            user_id=current_user.id,
-            brand=brand,
-            last4=last4,
-            exp_month=exp_month,
-            exp_year=exp_year,
-            token=token or None,
-            is_default=make_default
-        )
-        db.session.add(pm)
-        db.session.commit()
-        flash("Payment method added.", "success")
-        return redirect(url_for("funds"))
-
-    return render_template("payment_methods_add.html")
-
-@app.route("/payment-methods/default/<int:pm_id>", methods=["POST"])
-@customer_required
-def set_default_payment_method(pm_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    pm = PaymentMethod.query.filter_by(id=pm_id, user_id=current_user.id).first_or_404()
-    PaymentMethod.query.filter_by(user_id=current_user.id, is_default=True).update({"is_default": False})
-    pm.is_default = True
-    db.session.commit()
-    flash("Default payment method updated.", "success")
-    return redirect(url_for("funds"))
-
-@app.route("/payment-methods/delete/<int:pm_id>", methods=["POST"])
-@customer_required
-def delete_payment_method(pm_id):
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    pm = PaymentMethod.query.filter_by(id=pm_id, user_id=current_user.id).first_or_404()
-    was_default = pm.is_default
-    db.session.delete(pm)
-    db.session.commit()
-    if was_default:
-        new_default = PaymentMethod.query.filter_by(user_id=current_user.id).first()
-        if new_default:
-            new_default.is_default = True
-            db.session.commit()
-    flash("Payment method removed.", "info")
-    return redirect(url_for("funds"))
-
-@app.route("/profile", endpoint="profile")
-@login_required
-def profile():
-    if DISABLE_OLD_UI:
-        return ui_disabled()
-    if current_user.role == "customer":
-        return render_template("profile.html", user=current_user)
-    if current_user.role == "admin":
-        return render_template("admin_profile.html", user=current_user)
-    flash("Unauthorized access.", "danger")
-    return redirect(url_for("home"))
-
-# ---------------- ADMIN ROUTES ---------------- #
-@app.route("/admin")
-@admin_required
-def admin_dashboard():
-    stocks = Stock.query.all()
-    return render_template("admin_dashboard.html", stocks=stocks)
-
-@app.route("/admin/create-stock", methods=["GET", "POST"])
-@admin_required
-def create_stock():
-    if request.method == "POST":
-        company_name = request.form["company_name"]
-        symbol = request.form["symbol"].upper().strip()
-        price = float(request.form["price"])
-        volume = float(request.form["volume"])
-
-        if Stock.query.filter_by(symbol=symbol).first():
-            flash("Stock symbol already exists!", "danger")
-            return redirect(url_for("create_stock"))
-
-        db.session.add(Stock(company_name=company_name, symbol=symbol, price=price, volume=volume))
-        db.session.commit()
-        flash("Stock created successfully!", "success")
-        return redirect(url_for("admin_dashboard"))
-
-    return render_template("create_stock.html")
-
-@app.route("/admin/delete-stock/<int:stock_id>", methods=["POST"])
-@admin_required
-def delete_stock(stock_id):
-    stock = Stock.query.get_or_404(stock_id)
-    db.session.delete(stock)
-    db.session.commit()
-    flash("Stock deleted successfully!", "success")
-    return redirect(url_for("admin_dashboard"))
-
-@app.route("/admin/change-market", methods=["GET", "POST"])
-@admin_required
-def change_market():
-    settings = MarketSettings.query.first()
-    if not settings:
-        settings = MarketSettings()
-        db.session.add(settings)
-        db.session.commit()
-
-    if request.method == "POST":
-        if "clear_override" in request.form:
-            settings.admin_override = False
-            db.session.commit()
-            flash("Admin override disabled. Market is back to normal schedule.", "info")
-            return redirect(url_for("change_market"))
-        
-        if "toggle_market" in request.form:
-            settings.admin_override = True
-            settings.is_open = not settings.is_open
-            db.session.commit()
-            flash(f"Market manually {'opened' if settings.is_open else 'closed'} by admin.", "info")
-            return redirect(url_for("change_market"))
-
-        elif "open_time" in request.form and "close_time" in request.form:
-            try:
-                open_time = datetime.strptime(request.form["open_time"], "%H:%M").time()
-                close_time = datetime.strptime(request.form["close_time"], "%H:%M").time()
-                settings.open_time = open_time
-                settings.close_time = close_time
-                db.session.commit()
-                flash("Market hours updated successfully!", "success")
-                return redirect(url_for("change_market"))
-            except Exception:
-                flash("Invalid time format. Please enter valid times.", "danger")
-                return redirect(url_for("change_market"))
-
-        elif "closed_dates" in request.form:
-            closed_dates_str = request.form.get("closed_dates", "").strip()
-            if closed_dates_str:
-                try:
-                    dates = []
-                    for d in closed_dates_str.split(","):
-                        d = d.strip()
-                        if not d:
-                            continue
-                        parsed = datetime.strptime(d, "%Y-%m-%d")
-                        dates.append(parsed.strftime("%Y-%m-%d"))
-                    settings.closed_dates = ", ".join(dates)
-                except ValueError:
-                    flash("Invalid date format. Please select dates using the date picker.", "danger")
-                    return redirect(url_for("change_market"))
-            else:
-                settings.closed_dates = ""
-
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            closed_set = set(d.strip() for d in settings.closed_dates.split(",") if d.strip())
-
-            if today_str not in closed_set and not settings.is_open:
-                settings.is_open = True
-                flash("Today was removed from closed dates — market automatically reopened.", "info")
-
-            db.session.commit()
-            flash("Closed dates updated successfully!", "success")
-            return redirect(url_for("change_market"))
-
-    return render_template("change_market.html", settings=settings)
-
+# ---------------- API ROUTES ---------------- #
 
 @app.route("/api/stocks", methods=["GET"])
 @login_required
@@ -817,13 +388,23 @@ def api_register():
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
+    role = (data.get("role") or "customer").strip().lower()
+    admin_key = (data.get("admin_key") or "").strip()
+
     if not full_name or not username or not email or not password:
         return jsonify({"error": "MISSING_FIELDS"}), 400
+
+    if role not in {"customer", "admin"}:
+        return jsonify({"error": "INVALID_ROLE"}), 400
+
+    if role == "admin":
+        expected = os.getenv("ADMIN_SECRET_KEY")
+        if not expected or admin_key != expected:
+            return jsonify({"error": "INVALID_ADMIN_SECRET"}), 403
 
     if len(password) < 6:
         return jsonify({"error": "WEAK_PASSWORD"}), 400
 
-    # unique checks
     if User.query.filter_by(email=email).first():
         return jsonify({"error": "EMAIL_EXISTS"}), 409
 
@@ -837,7 +418,7 @@ def api_register():
         name=username,
         email=email,
         password=hashed_password,
-        role="customer",
+        role=role,
         funds=0.0
     )
 
@@ -1166,6 +747,153 @@ def api_withdraw_funds():
 @app.route("/api/market/status", methods=["GET"])
 def api_market_status():
     return jsonify(market_status()), 200
+
+@app.route("/api/admin/market/toggle", methods=["POST"])
+@admin_required
+def api_admin_market_toggle():
+    settings = MarketSettings.query.first()
+    if not settings:
+        settings = MarketSettings()
+        db.session.add(settings)
+        db.session.commit()
+
+    # Enable admin override and flip open/close
+    settings.admin_override = True
+    settings.is_open = not settings.is_open
+    db.session.commit()
+
+    return jsonify({
+        "message": "TOGGLED",
+        "admin_override": settings.admin_override,
+        "is_open": settings.is_open
+    }), 200
+
+@app.route("/api/admin/stocks", methods=["GET"])
+@admin_required
+def api_admin_stocks():
+    stocks = Stock.query.all()
+    return jsonify([
+        {
+            "id": s.id,
+            "company_name": s.company_name,
+            "symbol": s.symbol,
+            "price": s.price,
+            "volume": s.volume
+        } for s in stocks
+    ]), 200
+
+@app.route("/api/admin/stocks", methods=["POST"])
+@admin_required
+def api_admin_create_stock():
+    data = request.get_json(silent=True) or {}
+
+    company_name = (data.get("company_name") or "").strip()
+    symbol = (data.get("symbol") or "").strip().upper()
+    price = data.get("price")
+    volume = data.get("volume")
+
+    if not company_name or not symbol or price is None or volume is None:
+        return jsonify({"error": "MISSING_FIELDS"}), 400
+
+    try:
+        price = float(price)
+        volume = float(volume)
+    except Exception:
+        return jsonify({"error": "INVALID_NUMBER"}), 400
+
+    if price <= 0 or volume < 0:
+        return jsonify({"error": "INVALID_VALUES"}), 400
+
+    if Stock.query.filter_by(symbol=symbol).first():
+        return jsonify({"error": "SYMBOL_EXISTS"}), 409
+
+    s = Stock(company_name=company_name, symbol=symbol, price=price, volume=volume)
+    db.session.add(s)
+    db.session.commit()
+
+    return jsonify({
+        "message": "CREATED",
+        "stock": {
+            "id": s.id,
+            "company_name": s.company_name,
+            "symbol": s.symbol,
+            "price": s.price,
+            "volume": s.volume
+        }
+    }), 201
+
+
+@app.route("/api/admin/stocks/<int:stock_id>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_stock(stock_id):
+    s = Stock.query.get_or_404(stock_id)
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({"message": "DELETED"}), 200
+
+@app.route("/api/admin/market/hours", methods=["POST"])
+@admin_required
+def api_admin_market_set_hours():
+    data = request.get_json(silent=True) or {}
+    open_time = data.get("open_time")  # "HH:MM"
+    close_time = data.get("close_time")  # "HH:MM"
+
+    if not open_time or not close_time:
+        return jsonify({"error": "MISSING_FIELDS"}), 400
+
+    try:
+        ot = datetime.strptime(open_time, "%H:%M").time()
+        ct = datetime.strptime(close_time, "%H:%M").time()
+    except Exception:
+        return jsonify({"error": "INVALID_TIME"}), 400
+
+    settings = MarketSettings.query.first()
+    if not settings:
+        settings = MarketSettings()
+        db.session.add(settings)
+        db.session.commit()
+
+    settings.open_time = ot
+    settings.close_time = ct
+    db.session.commit()
+
+    return jsonify({
+        "message": "HOURS_UPDATED",
+        "open_time": settings.open_time.strftime("%H:%M"),
+        "close_time": settings.close_time.strftime("%H:%M"),
+    }), 200
+
+@app.route("/api/admin/market/closed-dates", methods=["POST"])
+@admin_required
+def api_admin_market_set_closed_dates():
+    data = request.get_json(silent=True) or {}
+    dates = data.get("dates")  # ["YYYY-MM-DD", ...]
+
+    if not isinstance(dates, list):
+        return jsonify({"error": "INVALID_DATES"}), 400
+
+    normalized = []
+    try:
+        for d in dates:
+            d = (d or "").strip()
+            parsed = datetime.strptime(d, "%Y-%m-%d")
+            normalized.append(parsed.strftime("%Y-%m-%d"))
+    except Exception:
+        return jsonify({"error": "INVALID_DATE_FORMAT"}), 400
+
+    settings = MarketSettings.query.first()
+    if not settings:
+        settings = MarketSettings()
+        db.session.add(settings)
+        db.session.commit()
+
+    settings.closed_dates = ", ".join(sorted(set(normalized)))
+    db.session.commit()
+
+    return jsonify({
+        "message": "CLOSED_DATES_UPDATED",
+        "closed_dates": settings.closed_dates
+    }), 200
 
 if __name__ == "__main__":
     app.run(debug=True)
