@@ -6,10 +6,21 @@ export default function RegisterPage({ onRegister, error }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const [role, setRole] = useState("customer");
+  const [adminKey, setAdminKey] = useState("");
+
   const [success, setSuccess] = useState(false);
 
   async function handleRegister() {
-    const result = await onRegister(fullName, username, email, password);
+    const result = await onRegister(
+      fullName,
+      username,
+      email,
+      password,
+      role,
+      adminKey
+    );
 
     if (result === "SUCCESS") {
       setSuccess(true);
@@ -68,10 +79,30 @@ export default function RegisterPage({ onRegister, error }) {
         style={{ width: "100%", padding: 10, marginBottom: 10 }}
       />
 
-      <button
-        onClick={handleRegister}
-        style={{ width: "100%", padding: 10 }}
-      >
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: "block", marginBottom: 6, color: "#333" }}>
+          Account type
+        </label>
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          style={{ width: "100%", padding: 10 }}
+        >
+          <option value="customer">Customer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      {role === "admin" && (
+        <input
+          placeholder="Admin secret key"
+          value={adminKey}
+          onChange={(e) => setAdminKey(e.target.value)}
+          style={{ width: "100%", padding: 10, marginBottom: 10 }}
+        />
+      )}
+
+      <button onClick={handleRegister} style={{ width: "100%", padding: 10 }}>
         Register
       </button>
 

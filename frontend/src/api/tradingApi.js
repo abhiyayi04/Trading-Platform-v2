@@ -4,11 +4,11 @@ export const tradingApi = {
   // ---- auth ----
   me: () => fetchJSON("/api/me"),
 
-  register: (full_name, username, email, password) =>
+  register: (full_name, username, email, password, role = "customer", admin_key = "") =>
     fetchJSON("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name, username, email, password }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name, username, email, password, role, admin_key }),
     }),
 
   login: (email, password) =>
@@ -29,6 +29,7 @@ export const tradingApi = {
   portfolio: () => fetchJSON("/api/portfolio"),
   funds: () => fetchJSON("/api/funds"),
   marketStatus: () => fetchJSON("/api/market/status"),
+  adminStocks: () => fetchJSON("/api/admin/stocks"),
 
   // ---- actions ----
   placeOrder: (side, stock_id, quantity) =>
@@ -57,4 +58,35 @@ export const tradingApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amount }),
     }),
+
+  adminToggleMarket: () =>
+  fetchJSON("/api/admin/market/toggle", {
+    method: "POST",
+  }),
+
+  adminCreateStock: (company_name, symbol, price, volume) =>
+  fetchJSON("/api/admin/stocks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company_name, symbol, price, volume }),
+  }),
+
+adminDeleteStock: (stockId) =>
+  fetchJSON(`/api/admin/stocks/${stockId}`, {
+    method: "DELETE",
+  }),
+
+adminSetMarketHours: (open_time, close_time) =>
+  fetchJSON("/api/admin/market/hours", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ open_time, close_time }),
+  }),
+
+adminSetClosedDates: (dates) =>
+  fetchJSON("/api/admin/market/closed-dates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dates }),
+  }),
 };
