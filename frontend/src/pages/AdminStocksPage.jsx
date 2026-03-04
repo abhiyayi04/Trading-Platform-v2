@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import AdminNavBar from "../components/AdminNavBar";
 import { tradingApi } from "../api/tradingApi";
 
-export default function AdminStocksPage({ user, onLogout }) {
+export default function AdminStocksPage() {
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +35,7 @@ export default function AdminStocksPage({ user, onLogout }) {
     setError("");
     setNotice("");
 
-    if (!companyName.trim() || !symbol.trim() || !price || volume === "") {
+    if (!companyName.trim() || !symbol.trim() || price === "" || volume === "") {
       setError("Please fill all fields.");
       return;
     }
@@ -75,97 +74,158 @@ export default function AdminStocksPage({ user, onLogout }) {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "40px auto", fontFamily: "Arial" }}>
-      <AdminNavBar user={user} onLogout={onLogout} />
-
-      <h1 style={{ marginTop: 24 }}>Manage Stocks</h1>
-
-      {notice && <p style={{ color: "green" }}>{notice}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <div style={{ marginTop: 16, padding: 12, border: "1px solid #ddd" }}>
-        <h2 style={{ marginTop: 0 }}>Create Stock</h2>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <input
-            placeholder="Company name"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            style={{ padding: 10, width: 260 }}
-          />
-          <input
-            placeholder="Symbol (e.g. AAPL)"
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            style={{ padding: 10, width: 160 }}
-          />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Price"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            style={{ padding: 10, width: 140 }}
-          />
-          <input
-            type="number"
-            step="1"
-            min="0"
-            placeholder="Volume"
-            value={volume}
-            onChange={(e) => setVolume(e.target.value)}
-            style={{ padding: 10, width: 160 }}
-          />
-
-          <button onClick={createStock} style={{ padding: "10px 16px" }}>
-            Create
+    <div className="page">
+      <div className="panel">
+        <div className="cardHeader">
+          <div>
+            <h1 className="title">Manage Stocks</h1>
+            <p className="muted" style={{ marginTop: 6 }}>
+              Create new stocks and remove existing listings.
+            </p>
+          </div>
+          <button className="btn" onClick={loadStocks}>
+            Refresh
           </button>
         </div>
+
+        {notice && (
+          <div className="alert ok" style={{ marginTop: 12 }}>
+            {notice}
+          </div>
+        )}
+        {error && (
+          <div className="alert bad" style={{ marginTop: 12 }}>
+            {error}
+          </div>
+        )}
+
+        {/* Create Stock */}
+        <div style={{ marginTop: 16 }}>
+          <div className="kv">
+            <div className="k">Create Stock</div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                marginTop: 10,
+                alignItems: "flex-end",
+              }}
+            >
+              <div style={{ minWidth: 260, flex: "1 1 260px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                  Company name
+                </div>
+                <input
+                  className="input"
+                  placeholder="e.g. Apple Inc."
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                />
+              </div>
+
+              <div style={{ minWidth: 160, flex: "0 1 160px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                  Symbol
+                </div>
+                <input
+                  className="input"
+                  placeholder="e.g. AAPL"
+                  value={symbol}
+                  onChange={(e) => setSymbol(e.target.value)}
+                />
+              </div>
+
+              <div style={{ minWidth: 140, flex: "0 1 140px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                  Price
+                </div>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </div>
+
+              <div style={{ minWidth: 160, flex: "0 1 160px" }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                  Volume
+                </div>
+                <input
+                  className="input"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="0"
+                  value={volume}
+                  onChange={(e) => setVolume(e.target.value)}
+                />
+              </div>
+
+              <button className="btn" onClick={createStock}>
+                Create
+              </button>
+            </div>
+
+            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+              Tip: Use short, unique symbols (e.g., TSLA, GOOGL).
+            </p>
+          </div>
+        </div>
+
+        {/* Stocks Table */}
+        <div style={{ marginTop: 18 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>Stocks</h2>
+
+          {loading ? (
+            <p className="muted" style={{ marginTop: 10 }}>
+              Loading stocks...
+            </p>
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Symbol</th>
+                    <th>Price</th>
+                    <th>Volume</th>
+                    <th style={{ width: 160 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stocks.map((s) => (
+                    <tr key={s.id}>
+                      <td>{s.company_name}</td>
+                      <td>{s.symbol}</td>
+                      <td>${Number(s.price).toFixed(2)}</td>
+                      <td>{Number(s.volume).toLocaleString()}</td>
+                      <td>
+                        <button className="btn danger" onClick={() => deleteStock(s.id)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {stocks.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="muted" style={{ textAlign: "center" }}>
+                        No stocks yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-
-      <h2 style={{ marginTop: 24 }}>Stocks</h2>
-
-      {loading ? (
-        <p>Loading stocks...</p>
-      ) : (
-        <table width="100%" cellPadding="10">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Symbol</th>
-              <th>Price</th>
-              <th>Volume</th>
-              <th style={{ width: 140 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stocks.map((s) => (
-              <tr key={s.id}>
-                <td>{s.company_name}</td>
-                <td>{s.symbol}</td>
-                <td>${Number(s.price).toFixed(2)}</td>
-                <td>{Number(s.volume).toLocaleString()}</td>
-                <td>
-                  <button
-                    onClick={() => deleteStock(s.id)}
-                    style={{ padding: "8px 12px" }}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {stocks.length === 0 && (
-              <tr>
-                <td colSpan="5" style={{ color: "#666", textAlign: "center" }}>
-                  No stocks yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
     </div>
   );
 }

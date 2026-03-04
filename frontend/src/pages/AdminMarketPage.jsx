@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import AdminNavBar from "../components/AdminNavBar";
 import { tradingApi } from "../api/tradingApi";
 
 function parseClosedDates(value) {
@@ -10,7 +9,7 @@ function parseClosedDates(value) {
     .filter(Boolean);
 }
 
-export default function AdminMarketPage({ user, onLogout }) {
+export default function AdminMarketPage() {
   const [status, setStatus] = useState(null);
 
   const [openTime, setOpenTime] = useState("09:30");
@@ -32,8 +31,6 @@ export default function AdminMarketPage({ user, onLogout }) {
     const data = await tradingApi.marketStatus();
     setStatus(data);
 
-    // If your /api/market/status includes open_time/close_time/closed_dates, use them.
-    // If not, we’ll keep defaults for now.
     if (data.open_time) setOpenTime(data.open_time);
     if (data.close_time) setCloseTime(data.close_time);
 
@@ -118,134 +115,203 @@ export default function AdminMarketPage({ user, onLogout }) {
     }
   }
 
+  const marketLabel = status?.is_open ? "OPEN" : "CLOSED";
+  const marketReason = status?.reason || "...";
+  const overrideLabel = status?.admin_override ? "ON" : "OFF";
+
   return (
-    <div style={{ maxWidth: 1100, margin: "40px auto", fontFamily: "Arial" }}>
-      <AdminNavBar user={user} onLogout={onLogout} />
-
-      <h1 style={{ marginTop: 24 }}>Change Market Schedule</h1>
-
-      {notice && <p style={{ color: "green" }}>{notice}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {loading || !status ? (
-        <p>Loading market status...</p>
-      ) : (
-        <>
-          <div style={{ marginTop: 16, padding: 12, border: "1px solid #ddd" }}>
-            <h2 style={{ marginTop: 0 }}>Current Status</h2>
-            <p style={{ marginTop: 0 }}>
-              <b>Admin Override:</b> {status.admin_override ? "ON" : "OFF"}
+    <div className="page">
+      <div className="panel">
+        <div className="cardHeader">
+          <div>
+            <h1 className="title">Change Market Schedule</h1>
+            <p className="muted" style={{ marginTop: 6 }}>
+              Manage market hours, closures, and admin override.
             </p>
-            <p>
-              <b>Market:</b>{" "}
-              <span style={{ color: status.is_open ? "green" : "red" }}>
-                {status.is_open ? "OPEN" : "CLOSED"}
-              </span>{" "}
-              <span style={{ color: "#666" }}>({status.reason})</span>
-            </p>
-
-            <button onClick={toggleMarket} style={{ padding: "10px 16px" }}>
-              Toggle Open / Close (Admin Override)
-            </button>
           </div>
+          <button className="btn" onClick={loadStatus}>
+            Refresh
+          </button>
+        </div>
 
-          <div
-            style={{
-              marginTop: 16,
-              padding: 12,
-              border: "1px solid #ddd",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 16,
-            }}
-          >
-            {/* Market Hours */}
-            <div>
-              <h2 style={{ marginTop: 0 }}>Market Hours</h2>
+        {notice && (
+          <div className="alert ok" style={{ marginTop: 12 }}>
+            {notice}
+          </div>
+        )}
+        {error && (
+          <div className="alert bad" style={{ marginTop: 12 }}>
+            {error}
+          </div>
+        )}
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 12, color: "#666" }}>Open</div>
-                  <input
-                    type="time"
-                    value={openTime}
-                    onChange={(e) => setOpenTime(e.target.value)}
-                    style={{ padding: 10, width: 180 }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, color: "#666" }}>Close</div>
-                  <input
-                    type="time"
-                    value={closeTime}
-                    onChange={(e) => setCloseTime(e.target.value)}
-                    style={{ padding: 10, width: 180 }}
-                  />
-                </div>
-
-                <button onClick={saveHours} style={{ padding: "10px 16px" }}>
-                  Update Hours
-                </button>
-              </div>
-
-              <p style={{ color: "#666", marginTop: 10 }}>
-                Times should be in 24-hour format (input handles this).
-              </p>
-            </div>
-
-            {/* Closed Dates */}
-            <div>
-              <h2 style={{ marginTop: 0 }}>Closed Dates</h2>
-
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                  type="date"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  style={{ padding: 10, width: 200 }}
-                />
-                <button onClick={addClosedDate} style={{ padding: "10px 16px" }}>
-                  Add Date
-                </button>
-                <button
-                  onClick={saveClosedDates}
-                  style={{ padding: "10px 16px" }}
+        {loading || !status ? (
+          <p className="muted" style={{ marginTop: 14 }}>
+            Loading market status...
+          </p>
+        ) : (
+          <>
+            {/* Current Status */}
+            <div style={{ marginTop: 16 }}>
+              <div className="kv">
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 14,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
                 >
-                  Save Closed Dates
-                </button>
-              </div>
-
-              {closedDatesSorted.length === 0 ? (
-                <p style={{ color: "#666", marginTop: 10 }}>No closed dates yet.</p>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  {closedDatesSorted.map((d) => (
-                    <div
-                      key={d}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        border: "1px solid #eee",
-                        padding: "8px 10px",
-                        marginBottom: 6,
-                        borderRadius: 6,
-                      }}
-                    >
-                      <span>{d}</span>
-                      <button onClick={() => removeClosedDate(d)}>Remove</button>
+                  <div>
+                    <div className="k">Current Status</div>
+                    <div style={{ marginTop: 10 }}>
+                      <div className="muted" style={{ marginBottom: 6 }}>
+                        <b>Admin Override:</b> {overrideLabel}
+                      </div>
+                      <div>
+                        <span className="muted">
+                          <b>Market:</b>{" "}
+                        </span>
+                        <span style={{ fontWeight: 900 }}>
+                          {marketLabel}
+                        </span>{" "}
+                        <span className="muted" style={{ opacity: 0.75 }}>
+                          ({marketReason})
+                        </span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
 
-              <p style={{ color: "#666", marginTop: 10 }}>
-                Click “Save Closed Dates” to persist to the database.
-              </p>
+                  <button className="btn" onClick={toggleMarket}>
+                    Toggle Open / Close (Admin Override)
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+
+            {/* Controls */}
+            <div style={{ marginTop: 16 }}>
+              <div className="grid2">
+                {/* Market Hours */}
+                <div className="kv">
+                  <div className="k">Market Hours</div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "flex-end",
+                      flexWrap: "wrap",
+                      marginTop: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 200 }}>
+                      <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                        Open
+                      </div>
+                      <input
+                        className="input"
+                        type="time"
+                        value={openTime}
+                        onChange={(e) => setOpenTime(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ minWidth: 200 }}>
+                      <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                        Close
+                      </div>
+                      <input
+                        className="input"
+                        type="time"
+                        value={closeTime}
+                        onChange={(e) => setCloseTime(e.target.value)}
+                      />
+                    </div>
+
+                    <button className="btn" onClick={saveHours}>
+                      Update Hours
+                    </button>
+                  </div>
+
+                  <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+                    Times are in 24-hour format.
+                  </p>
+                </div>
+
+                {/* Closed Dates */}
+                <div className="kv">
+                  <div className="k">Closed Dates</div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "flex-end",
+                      flexWrap: "wrap",
+                      marginTop: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 220 }}>
+                      <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                        Add a date
+                      </div>
+                      <input
+                        className="input"
+                        type="date"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                      />
+                    </div>
+
+                    <button className="btn" onClick={addClosedDate}>
+                      Add Date
+                    </button>
+
+                    <button className="btn" onClick={saveClosedDates}>
+                      Save Closed Dates
+                    </button>
+                  </div>
+
+                  {closedDatesSorted.length === 0 ? (
+                    <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+                      No closed dates yet.
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                      {closedDatesSorted.map((d) => (
+                        <div
+                          key={d}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            borderRadius: 12,
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            background: "rgba(255,255,255,0.04)",
+                          }}
+                        >
+                          <span style={{ fontWeight: 800 }}>{d}</span>
+                          <button className="btn danger" onClick={() => removeClosedDate(d)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
+                    Click <b>Save Closed Dates</b> to persist to the database.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

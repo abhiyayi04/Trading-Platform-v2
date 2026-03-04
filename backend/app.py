@@ -24,6 +24,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = SQLALCHEMY_TRACK_MODIFICATIONS
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key")
 
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=not app.debug
+)
+
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 
@@ -248,11 +254,33 @@ def update_price(current_price: float, drift: float = 0.0005) -> float:
 
 def update_all_stock_prices():
     with app.app_context():
+        if not market_is_open():
+            return
+
         for stock in Stock.query.all():
-            stock.price = update_price(stock.price)
+            stock.price = update_price(float(stock.price))
         db.session.commit()
 
 # ------------- MARKET SETTINGS ---------------- #
+def default_holidays_set():
+    return {
+        "2025-01-01",
+        "2025-01-20",
+        "2025-02-17",
+        "2025-04-18",
+        "2025-05-26",
+        "2025-06-19",
+        "2025-07-04",
+        "2025-09-01",
+        "2025-11-27",
+        "2025-12-25",
+    }
+
+def get_closed_dates(settings: MarketSettings):
+    # DB closed dates + built-in holidays
+    db_dates = {d.strip() for d in (settings.closed_dates or "").split(",") if d.strip()}
+    return default_holidays_set() | db_dates
+
 def market_is_open():
     settings = MarketSettings.query.first()
     if not settings:
@@ -270,22 +298,9 @@ def market_is_open():
     if now.weekday() >= 5:
         return False
 
-    default_holidays = {
-        "2025-01-01",
-        "2025-01-20",
-        "2025-02-17",
-        "2025-04-18",
-        "2025-05-26",
-        "2025-06-19",
-        "2025-07-04",
-        "2025-09-01",
-        "2025-11-27",
-        "2025-12-25",
-    }
+    closed = get_closed_dates(settings)
 
-    closed_dates = {d.strip() for d in settings.closed_dates.split(",") if d.strip()}
-
-    if today_str in default_holidays or today_str in closed_dates:
+    if today_str in closed:
         return False
 
     return settings.open_time <= now.time() <= settings.close_time
@@ -317,9 +332,9 @@ def market_status():
     if now.weekday() >= 5:
         return {"has_settings": True, "is_open": False, "reason": "WEEKEND"}
 
-    closed_dates = {d.strip() for d in (settings.closed_dates or "").split(",") if d.strip()}
-    if today_str in closed_dates:
-        return {"has_settings": True, "is_open": False, "reason": "CLOSED_DATE"}
+    closed = get_closed_dates(settings)
+    if today_str in closed:
+        return {"has_settings": True, "is_open": False, "reason": "HOLIDAY_OR_CLOSED_DATE"}
 
     if not (settings.open_time <= now.time() <= settings.close_time):
         return {
@@ -345,9 +360,16 @@ app.jinja_env.globals.update(market_is_open=market_is_open)
 # scheduler
 scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(func=update_all_stock_prices, trigger="interval", seconds=10)
-if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-    scheduler.start()
-atexit.register(lambda: scheduler.shutdown(wait=False))
+
+def start_scheduler():
+    if app.debug:
+        if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+            return
+    if not scheduler.running:
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown(wait=False))
+
+start_scheduler()
 
 # ---------------- API ROUTES ---------------- #
 

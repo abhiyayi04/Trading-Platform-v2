@@ -3,13 +3,22 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import "./App.css";
 import { tradingApi } from "./api/tradingApi";
-import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import FundsPage from "./pages/FundsPage";
+
 import RegisterPage from "./pages/RegisterPage";
+import LoginPage from "./pages/LoginPage";
+
+import PortfolioPage from "./pages/PortfolioPage";
+import MarketPage from "./pages/MarketPage";
+import TransactionsPage from "./pages/TransactionsPage";
+import FundsPage from "./pages/FundsPage";
+import ProfilePage from "./pages/ProfilePage";
+
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminMarketPage from "./pages/AdminMarketPage";
 import AdminStocksPage from "./pages/AdminStocksPage";
+
+import AppLayout from "./components/AppLayout";
+import AdminLayout from "./components/AdminLayout";
 
 function App() {
   const navigate = useNavigate();
@@ -24,7 +33,6 @@ function App() {
 
   const [buyQty, setBuyQty] = useState({});
   const [sellQty, setSellQty] = useState({});
-
   const [market, setMarket] = useState(null);
 
   async function refreshMe() {
@@ -61,7 +69,7 @@ function App() {
           setUser(me);
 
           const isAdmin = me.role === "admin";
-          navigate(isAdmin ? "/admin" : "/dashboard", { replace: true });
+          navigate(isAdmin ? "/admin" : "/portfolio", { replace: true });
 
           if (!isAdmin) {
             await loadStocks();
@@ -81,6 +89,7 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
+    if (user.role === "admin") return;
 
     const id = setInterval(async () => {
       try {
@@ -90,12 +99,11 @@ function App() {
         await refreshMe();
         await loadMarketStatus();
       } catch (e) {
-        // ignore polling errors
       }
-    }, 5000);
+    }, 10000);
 
     return () => clearInterval(id);
-  }, [user]);
+  }, [user?.id, user?.role]);
 
   async function register(fullName, username, email, password, role, adminKey) {
     setError("");
@@ -118,17 +126,15 @@ function App() {
       const data = await tradingApi.login(emailInput, passwordInput);
       setUser(data.user);
 
-      // 1) Redirect immediately based on role
       const isAdmin = data.user.role === "admin";
-      navigate(isAdmin ? "/admin" : "/dashboard", { replace: true });
+      navigate(isAdmin ? "/admin" : "/portfolio", { replace: true });
 
-      // 2) Only load customer data for customers (admins will 403 on these)
       if (!isAdmin) {
         await loadStocks();
         await loadOrders();
         await loadPortfolio();
+        await loadMarketStatus();
       }
-
     } catch (e) {
       setError(e.message);
     }
@@ -145,11 +151,12 @@ function App() {
     setStocks([]);
     setOrders([]);
     setPortfolio(null);
+    setMarket(null);
     setNotice("");
     setError("");
   }
 
-  // ---------- PLACE BUY ORDER ----------
+  // NOTE: These are still here but we will move buy/sell UI into MarketPage/PortfolioPage in the next step.
   async function placeBuyOrder(stockId) {
     setError("");
     setNotice("");
@@ -206,7 +213,6 @@ function App() {
     }
   }
 
-  // ---------- EXECUTE / CANCEL ----------
   async function executeOrder(orderId) {
     setError("");
     setNotice("");
@@ -241,26 +247,14 @@ function App() {
         <p style={{ padding: 20 }}>Loading...</p>
       ) : (
         <Routes>
+          {/* ---------- AUTH ROUTES ---------- */}
           <Route
             path="/register"
             element={
               user ? (
-                <Navigate to="/dashboard" replace />
+                <Navigate to={user.role === "admin" ? "/admin" : "/portfolio"} replace />
               ) : (
                 <RegisterPage onRegister={register} error={error} />
-              )
-            }
-          />
-
-          <Route
-            path="/admin"
-            element={
-              !user ? (
-                <Navigate to="/login" replace />
-              ) : user.role !== "admin" ? (
-                <Navigate to="/dashboard" replace />
-              ) : (
-                <AdminDashboardPage user={user} onLogout={logout} />
               )
             }
           />
@@ -269,56 +263,25 @@ function App() {
             path="/login"
             element={
               user ? (
-                <Navigate to="/dashboard" replace />
+                <Navigate to={user.role === "admin" ? "/admin" : "/portfolio"} replace />
               ) : (
                 <LoginPage onLogin={login} error={error} />
               )
             }
           />
 
+          {/* ---------- ADMIN ROUTES ---------- */}
           <Route
-            path="/dashboard"
+            path="/admin"
             element={
               !user ? (
                 <Navigate to="/login" replace />
-              ) : user.role === "admin" ? (
-                <Navigate to="/admin" replace />
+              ) : user.role !== "admin" ? (
+                <Navigate to="/portfolio" replace />
               ) : (
-                <DashboardPage
-                  user={user}
-                  stocks={stocks}
-                  orders={orders}
-                  portfolio={portfolio}
-                  buyQty={buyQty}
-                  setBuyQty={setBuyQty}
-                  sellQty={sellQty}
-                  setSellQty={setSellQty}
-                  notice={notice}
-                  error={error}
-                  market={market}
-                  onLogout={logout}
-                  onPlaceBuy={placeBuyOrder}
-                  onPlaceSell={placeSellOrder}
-                  onExecuteOrder={executeOrder}
-                  onCancelOrder={cancelOrder}
-                />
-              )
-            }
-          />
-
-          {/* Default route */}
-          <Route
-            path="*"
-            element={<Navigate to={user ? "/dashboard" : "/login"} replace />}
-          />
-
-          <Route
-            path="/funds"
-            element={
-              user ? (
-                <FundsPage user={user} onLogout={logout} />
-              ) : (
-                <Navigate to="/login" replace />
+                <AdminLayout user={user} onLogout={logout}>
+                  <AdminDashboardPage user={user} />
+                </AdminLayout>
               )
             }
           />
@@ -329,9 +292,11 @@ function App() {
               !user ? (
                 <Navigate to="/login" replace />
               ) : user.role !== "admin" ? (
-                <Navigate to="/dashboard" replace />
+                <Navigate to="/portfolio" replace />
               ) : (
-                <AdminMarketPage user={user} onLogout={logout} />
+                <AdminLayout user={user} onLogout={logout}>
+                  <AdminMarketPage user={user} />
+                </AdminLayout>
               )
             }
           />
@@ -342,13 +307,105 @@ function App() {
               !user ? (
                 <Navigate to="/login" replace />
               ) : user.role !== "admin" ? (
-                <Navigate to="/dashboard" replace />
+                <Navigate to="/portfolio" replace />
               ) : (
-                <AdminStocksPage user={user} onLogout={logout} />
+                <AdminLayout user={user} onLogout={logout}>
+                  <AdminStocksPage user={user} />
+                </AdminLayout>
               )
             }
           />
 
+          {/* ---------- CUSTOMER ROUTES ---------- */}
+          <Route
+            path="/portfolio"
+            element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <AppLayout user={user} onLogout={logout}>
+                  <PortfolioPage />
+                </AppLayout>
+              )
+            }
+          />
+
+          <Route
+            path="/market"
+            element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <AppLayout user={user} onLogout={logout}>
+                  <MarketPage />
+                </AppLayout>
+              )
+            }
+          />
+
+          <Route
+            path="/funds"
+            element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <AppLayout user={user} onLogout={logout}>
+                  <FundsPage user={user} onLogout={logout} />
+                </AppLayout>
+              )
+            }
+          />
+
+          <Route
+            path="/transactions"
+            element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <AppLayout user={user} onLogout={logout}>
+                  <TransactionsPage />
+                </AppLayout>
+              )
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              !user ? (
+                <Navigate to="/login" replace />
+              ) : user.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <AppLayout user={user} onLogout={logout}>
+                  <ProfilePage user={user} onLogout={logout} />
+                </AppLayout>
+              )
+            }
+          />
+
+          {/* Default route */}
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={
+                  user
+                    ? (user.role === "admin" ? "/admin" : "/portfolio")
+                    : "/login"
+                }
+                replace
+              />
+            }
+          />
         </Routes>
       )}
     </>

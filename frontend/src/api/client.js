@@ -8,11 +8,15 @@ export async function fetchJSON(path, options = {}) {
 
   const text = await res.text();
 
-  let data;
+  let data = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`HTTP ${res.status} - ${text}`);
+  }
+
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
   }
 
   if (!res.ok) {

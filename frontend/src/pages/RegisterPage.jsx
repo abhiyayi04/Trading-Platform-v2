@@ -12,7 +12,9 @@ export default function RegisterPage({ onRegister, error }) {
 
   const [success, setSuccess] = useState(false);
 
-  async function handleRegister() {
+  async function handleRegister(e) {
+    e.preventDefault();
+
     const result = await onRegister(
       fullName,
       username,
@@ -22,93 +24,134 @@ export default function RegisterPage({ onRegister, error }) {
       adminKey
     );
 
-    if (result === "SUCCESS") {
-      setSuccess(true);
-    }
+    if (result === "SUCCESS") setSuccess(true);
   }
 
   if (success) {
     return (
-      <div style={{ maxWidth: 400, margin: "100px auto", fontFamily: "Arial" }}>
-        <h2>Account Created</h2>
-        <p style={{ color: "green" }}>
-          Registration successful. You can now log in.
-        </p>
+      <div className="appShell">
+        <main className="authWrap">
+          <div className="authCard">
+            <div className="panel">
+              <h1 className="title">Account created</h1>
+              <p className="muted" style={{ marginTop: 6 }}>
+                Registration successful. You can now log in.
+              </p>
 
-        <Link to="/login">
-          <button style={{ width: "100%", padding: 10, marginTop: 10 }}>
-            Go to Login
-          </button>
-        </Link>
+              <Link to="/login" style={{ textDecoration: "none" }}>
+                <button className="btn btnFull" style={{ marginTop: 14 }}>
+                  Go to Login
+                </button>
+              </Link>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "100px auto", fontFamily: "Arial" }}>
-      <h2>Create Account</h2>
+    <div className="appShell">
+      <main className="authWrap">
+        <div className="authCard">
+          <div className="panel">
+            <div>
+              <h1 className="title">Create account</h1>
+              <p className="muted" style={{ marginTop: 6 }}>
+                Set up your account to start trading.
+              </p>
+            </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+            {error && (
+              <div className="alert bad" style={{ marginTop: 12 }}>
+                {error}
+              </div>
+            )}
 
-      <input
-        placeholder="Full name"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
-        style={{ width: "100%", padding: 10, marginBottom: 10 }}
-      />
+            <form className="formGrid" onSubmit={handleRegister}>
+              <div>
+                <label className="label">Full name</label>
+                <input
+                  className="input"
+                  placeholder="Abhi Chandra Yayi"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="name"
+                />
+              </div>
 
-      <input
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        style={{ width: "100%", padding: 10, marginBottom: 10 }}
-      />
+              <div>
+                <label className="label">Username</label>
+                <input
+                  className="input"
+                  placeholder="student353"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                />
+              </div>
 
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ width: "100%", padding: 10, marginBottom: 10 }}
-      />
+              <div>
+                <label className="label">Email</label>
+                <input
+                  className="input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
 
-      <input
-        type="password"
-        placeholder="Password (min 6 chars)"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={{ width: "100%", padding: 10, marginBottom: 10 }}
-      />
+              <div>
+                <label className="label">Password</label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="min 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: "block", marginBottom: 6, color: "#333" }}>
-          Account type
-        </label>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          style={{ width: "100%", padding: 10 }}
-        >
-          <option value="customer">Customer</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
+              <div>
+                <label className="label">Account type</label>
+                <select
+                  className="select"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                >
+                  <option value="customer">Customer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
 
-      {role === "admin" && (
-        <input
-          placeholder="Admin secret key"
-          value={adminKey}
-          onChange={(e) => setAdminKey(e.target.value)}
-          style={{ width: "100%", padding: 10, marginBottom: 10 }}
-        />
-      )}
+              {role === "admin" && (
+                <div>
+                  <label className="label">Admin secret key</label>
+                  <input
+                    className="input"
+                    placeholder="Enter admin key"
+                    value={adminKey}
+                    onChange={(e) => setAdminKey(e.target.value)}
+                  />
+                </div>
+              )}
 
-      <button onClick={handleRegister} style={{ width: "100%", padding: 10 }}>
-        Register
-      </button>
+              <button className="btn btnFull" type="submit">
+                Register
+              </button>
+            </form>
 
-      <p style={{ marginTop: 12 }}>
-        Already have an account? <Link to="/login">Login</Link>
-      </p>
+            <p className="muted" style={{ marginTop: 14 }}>
+              Already have an account?{" "}
+              <Link to="/login" style={{ color: "rgba(255,255,255,0.92)", fontWeight: 800 }}>
+                Login
+              </Link>
+            </p>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
