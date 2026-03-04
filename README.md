@@ -1,55 +1,54 @@
 # Trading-Platform
 
 ## Overview
-This project is a **full-stack trading platform** built using **Flask** that simulates real-world stock trading functionality.  
-It supports **user authentication, role-based access (admin & customer), portfolio management, order execution, transaction tracking**, and **market hour controls**.
+This project is a **full-stack stock trading platform** built using a **Flask backend API and React frontend** that simulates real-world stock trading functionality.  
+It supports **user authentication, role-based access (admin & customer), portfolio management, order execution, transaction tracking**, and **market schedule controls**.
 
-The application was **deployed on AWS**, demonstrating experience with cloud deployment and production-ready backend systems.
+The system demonstrates experience building **REST APIs, modern frontend applications, and database-driven systems**, along with **cloud deployment on AWS**.
+
+---
+
+## Tech Stack
+- **Frontend:** React, JavaScript, HTML, CSS, Vite
+- **Backend:** Flask, SQLAlchemy, Python
+- **Authentication:** Flask-Login, Flask-Bcrypt
+- **Database:** MySQL
+- **Dev Tools:** Node.js, npm
+- **Deployment:** AWS
 
 ---
 
 ## Key Features
 
 ### Authentication & Authorization
-- Secure user authentication using **Flask-Login**
+- Secure login and registration
 - Password hashing with **Flask-Bcrypt**
-- Role-based access control:
-  - **Customers**: trade, manage portfolio, view transactions
-  - **Admins**: manage stocks and market settings
+- Session management with **Flask-Login**
+- Role-based access:
+  - **Customers:** trade stocks, manage portfolio, view transactions
+  - **Admins:** manage stocks and market settings
 
 ---
 
-### Trading Engine
-- Buy & Sell stock orders
-- Pending → Executed / Canceled order lifecycle
-- Simulated real-time stock price updates
-- Market hours enforcement (open / closed logic)
-- Admin override for market control
+### Trading System
+- Buy and sell stock orders
+- Order lifecycle tracking
+- Simulated stock price updates
+- Market open / closed trading restrictions
 
 ---
 
-### Portfolio & Funds Management
-- User portfolio tracking
-- Deposit and withdrawal simulation
-- Transaction history ledger
-- Payment method management (simulated)
+### Portfolio & Funds
+- Track owned stocks and portfolio value
+- Deposit and withdraw funds (simulation)
+- View transaction history
 
 ---
 
-### Market Logic
-- Configurable market open/close times
-- Closed trading days (holidays)
-- Automatic price updates using background scheduler
+### Admin Controls
+- Create and delete stocks
+- Configure market open / close hours
+- Set closed trading dates
+- Admin override to force market open or closed
 
 ---
-
-## Tech Stack
-- **Backend:** Flask, SQLAlchemy
-- **Authentication:** Flask-Login, Flask-Bcrypt
-- **Database:** MySQL=
-- **Frontend:** Jinja2, HTML, CSS, Bootstrap
-- **Deployment:** AWS
-
-
-Logo icon: Money icons created by Smashicons - Flaticon  
-https://www.flaticon.com/free-icons/money
